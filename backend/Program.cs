@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using RFC.Api.Data;
+using RFC.Api.Hubs;
 using RFC.Api.Infrastructure;
 using RFC.Api.Services;
 
@@ -11,11 +12,13 @@ EnvFile.LoadFromCommonLocations();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:5242");
 
-var connectionString = NormalizePostgresConnectionString(builder.Configuration.GetConnectionString("RfcDatabase"));
+var connectionString = ProgramConnectionStringNormalizer.NormalizePostgresConnectionString(
+    builder.Configuration.GetConnectionString("RfcDatabase"));
 if (!string.IsNullOrWhiteSpace(connectionString))
 {
     builder.Services.AddDbContext<RfcDbContext>(options =>
         options.UseNpgsql(connectionString));
+    builder.Services.AddScoped<AuditService>();
 }
 
 var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ??
@@ -40,7 +43,7 @@ builder.Services
         options.Cookie.Name = "rfc_session";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.Events.OnRedirectToLogin = context =>
@@ -84,8 +87,13 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<OrderPricingService>();
 builder.Services.AddSingleton<DeliveryRadiusService>();
+builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddHttpClient<GoogleMapsService>();
+builder.Services.AddSignalR();
+builder.Services.AddHealthChecks().AddCheck<PostgresHealthCheck>("postgres");
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -93,28 +101,41 @@ var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(app);
 
+app.UseHsts();
+app.UseHttpsRedirection();
+app.Use(async (context, next) =>
+{
+    var supabaseSource = BuildSupabaseCspSource(app.Configuration.GetConnectionString("RfcDatabase"));
+    context.Response.Headers["Content-Security-Policy"] =
+        $"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.stripe.com {supabaseSource}; frame-ancestors 'none'; base-uri 'self';";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    await next();
+});
+
 app.UseCors("ConfiguredOrigins");
+app.UseMiddleware<CsrfMiddleware>();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<OrderHub>("/hubs/order").RequireCors("ConfiguredOrigins");
+app.MapHealthChecks("/health");
 
 app.Run();
 
-static string? NormalizePostgresConnectionString(string? value)
+static string BuildSupabaseCspSource(string? value)
 {
-    if (string.IsNullOrWhiteSpace(value)) return value;
+    if (string.IsNullOrWhiteSpace(value)) return "https://*.supabase.co";
     if (!value.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
         !value.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
     {
-        return value;
+        var hostPart = value.Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(part => part.TrimStart().StartsWith("Host=", StringComparison.OrdinalIgnoreCase));
+        var host = hostPart?.Split('=', 2).ElementAtOrDefault(1);
+        return string.IsNullOrWhiteSpace(host) ? "https://*.supabase.co" : $"https://{host.Trim()}";
     }
 
-    var uri = new Uri(value);
-    var userInfo = uri.UserInfo.Split(':', 2);
-    var username = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(0) ?? string.Empty);
-    var password = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(1) ?? string.Empty);
-    var database = uri.AbsolutePath.TrimStart('/');
-
-    return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
+    return $"https://{new Uri(value).Host}";
 }

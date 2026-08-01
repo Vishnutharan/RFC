@@ -3,6 +3,7 @@ import { X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
 import { getCurrentUser, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
+import { deleteCurrentCustomer } from '../services/api';
 
 const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
 const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
@@ -20,7 +21,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
   // Auth Mode (if logged out or switching account)
   const [authMode, setAuthMode] = useState('none'); // 'none', 'login', 'register'
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', address: '', postcode: '' });
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', address: '', postcode: '', consentAccepted: false });
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
@@ -97,6 +98,11 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
         return;
       }
 
+      if (!authForm.consentAccepted) {
+        setAuthError('Please agree to the Privacy Policy and Terms.');
+        return;
+      }
+
       try {
         const user = await registerCustomer(authForm);
         setCurrentUser(user);
@@ -121,6 +127,19 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
     setAuthMode('login');
     setIsEditingProfile(false);
     if (showToast) showToast('Logged out.', 'info');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Delete your RFC account and anonymise retained order records?')) return;
+
+    try {
+      await deleteCurrentCustomer();
+      setCurrentUser(null);
+      setAuthMode('login');
+      if (showToast) showToast('Account deleted and order records anonymised.', 'info');
+    } catch (error) {
+      if (showToast) showToast(error.message || 'Account could not be deleted.', 'error');
+    }
   };
 
   const loyaltyCount = (orders.length % 8) || 7;
@@ -224,6 +243,14 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   <div className="input-group"><Phone size={16} /><input placeholder="Phone Number" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} /></div>
                   <div className="input-group"><MapPin size={16} /><input placeholder="Street Address" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} /></div>
                   <div className="input-group"><MapPin size={16} /><input placeholder="Postcode (e.g. WD24 6RU)" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value })} /></div>
+                  <label className="consent-row">
+                    <input
+                      type="checkbox"
+                      checked={authForm.consentAccepted}
+                      onChange={(e) => setAuthForm({ ...authForm, consentAccepted: e.target.checked })}
+                    />
+                    <span>I agree to the Privacy Policy and Terms.</span>
+                  </label>
                 </>
               )}
 
@@ -288,6 +315,14 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     </button>
                   </form>
                 )}
+
+                <div className="danger-zone">
+                  <h5>Account deletion</h5>
+                  <p>Delete your customer login and anonymise retained order records.</p>
+                  <button type="button" className="btn-soft-danger" onClick={handleDeleteAccount}>
+                    Delete My Account
+                  </button>
+                </div>
               </div>
             )}
 

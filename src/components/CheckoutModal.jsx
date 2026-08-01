@@ -1,27 +1,49 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
 import confetti from 'canvas-confetti';
-import { X, CreditCard, Lock, User, Mail, Phone, MapPin, Truck, Store, Banknote, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react';
+import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X } from 'lucide-react';
 import { checkDeliveryEligibility } from '../utils/deliveryRadius';
 import { getCurrentUser } from '../services/customerAuth';
+import { createPaymentIntent } from '../services/api';
 
-export default function CheckoutModal({ isOpen, onClose, cartItems = [], orderMode, appliedVoucher, onOrderSuccess }) {
+const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+
+export default function CheckoutModal(props) {
+  if (!props.isOpen) return null;
+
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutForm {...props} stripeConfigured={Boolean(stripePublishableKey)} />
+    </Elements>
+  );
+}
+
+function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVoucher, onOrderSuccess, stripeConfigured }) {
+  const stripe = useStripe();
+  const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [formData, setFormData] = useState({
-    name: '', email: '', phone: '',
-    address: '', postcode: '', notes: '',
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    postcode: '',
+    notes: '',
     paymentMethod: 'card'
   });
-  const [cardData, setCardData] = useState({ number: '', expiry: '', cvv: '' });
 
-  // Auto-prefill customer info from logged in profile on mount / open
   useEffect(() => {
     let isActive = true;
 
     if (isOpen) {
       getCurrentUser()
-        .then(user => {
+        .then((user) => {
           if (!isActive || !user) return;
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
             name: prev.name || user.name || '',
             email: prev.email || user.email || '',
@@ -38,209 +60,232 @@ export default function CheckoutModal({ isOpen, onClose, cartItems = [], orderMo
     };
   }, [isOpen]);
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  const handleCardChange = (e) => {
-    let { name, value } = e.target;
-    if (name === 'number') value = value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim().slice(0, 19);
-    if (name === 'expiry') value = value.replace(/\D/g, '').replace(/(.{2})/, '$1/').slice(0, 5);
-    if (name === 'cvv') value = value.replace(/\D/g, '').slice(0, 3);
-    setCardData({ ...cardData, [name]: value });
-  };
-
-  // 5 km Delivery Radius Eligibility Check
   const radiusCheck = useMemo(() => {
-    if (orderMode === 'collection') return { isEligible: true, distanceKm: 0, reason: 'Store Collection - 119 Courtlands Drive, Watford' };
+    if (orderMode === 'collection') {
+      return { isEligible: true, distanceKm: 0, reason: 'Store collection from 119 Courtlands Drive, Watford' };
+    }
     return checkDeliveryEligibility(formData.postcode);
   }, [formData.postcode, orderMode]);
 
-  const subtotal = cartItems.reduce((s, i) => s + i.price * i.quantity, 0);
+  const subtotal = useMemo(
+    () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [cartItems]
+  );
   const discount = appliedVoucher ? subtotal * appliedVoucher.discountPercent / 100 : 0;
   const deliveryFee = orderMode === 'delivery' && subtotal < 25 ? 2.50 : 0;
   const total = subtotal - discount + deliveryFee;
 
   const isValid = useMemo(() => {
-    const hasName = formData.name.trim().length >= 2;
-    const hasEmail = formData.email.includes('@');
-    const hasPhone = formData.phone.trim().length >= 8;
-    if (!hasName || !hasEmail || !hasPhone) return false;
+    const hasCustomer = formData.name.trim().length >= 2 &&
+      formData.email.includes('@') &&
+      formData.phone.trim().length >= 8;
 
+    if (!hasCustomer) return false;
     if (orderMode === 'delivery') {
-      const hasAddress = formData.address.trim().length >= 3;
-      const hasPostcode = formData.postcode.trim().length >= 3;
-      if (!hasAddress || !hasPostcode || !radiusCheck.isEligible) return false;
-    }
-
-    if (formData.paymentMethod === 'card') {
-      const cardClean = cardData.number.replace(/\s/g, '');
-      if (cardClean.length < 16) return false;
+      return formData.address.trim().length >= 3 &&
+        formData.postcode.trim().length >= 3 &&
+        radiusCheck.isEligible;
     }
 
     return true;
-  }, [formData, cardData, orderMode, radiusCheck]);
+  }, [formData, orderMode, radiusCheck]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const buildOrderPayload = (stripePaymentIntentId = null) => {
+    const now = new Date();
+    const formattedTimestamp = `${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, ${now.toLocaleTimeString('en-GB')}`;
+
+    return {
+      orderType: orderMode,
+      customerName: formData.name,
+      customerPhone: formData.phone,
+      customerEmail: formData.email,
+      deliveryAddress: orderMode === 'delivery' ? `${formData.address}, ${formData.postcode}` : 'Store Collection',
+      deliveryPostcode: formData.postcode,
+      deliveryNotes: formData.notes,
+      items: cartItems,
+      subtotal,
+      discountAmount: discount,
+      deliveryFee,
+      total,
+      voucherCode: appliedVoucher?.code || null,
+      paymentMethod: formData.paymentMethod,
+      paymentStatus: formData.paymentMethod === 'cash' ? 'PayOnCollectionOrDelivery' : 'Paid',
+      stripePaymentIntentId,
+      orderTime: formattedTimestamp,
+      createdAt: now.toISOString(),
+      distanceKm: radiusCheck.distanceKm
+    };
+  };
+
+  const confirmStripePayment = async () => {
+    if (!stripeConfigured || !stripe || !elements) {
+      throw new Error('Card payments are not configured yet. Please choose cash or add a Stripe publishable key.');
+    }
+
+    const card = elements.getElement(CardElement);
+    if (!card) throw new Error('Card details are not ready.');
+
+    const intent = await createPaymentIntent({ amount: total, customerEmail: formData.email });
+    const result = await stripe.confirmCardPayment(intent.clientSecret, {
+      payment_method: {
+        card,
+        billing_details: {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: orderMode === 'delivery' ? { line1: formData.address, postal_code: formData.postcode, country: 'GB' } : undefined
+        }
+      }
+    });
+
+    if (result.error) throw new Error(result.error.message || 'Card payment failed.');
+    if (result.paymentIntent?.status !== 'succeeded') throw new Error('Card payment was not confirmed.');
+    return result.paymentIntent.id;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (!isValid || isSubmitting) return;
 
     setIsSubmitting(true);
-    const now = new Date();
-    const formattedTimestamp = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + now.toLocaleTimeString('en-GB');
+    setSubmitError('');
 
-    setTimeout(() => {
+    try {
+      const stripePaymentIntentId = formData.paymentMethod === 'card'
+        ? await confirmStripePayment()
+        : null;
+
+      await onOrderSuccess(buildOrderPayload(stripePaymentIntentId));
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    } catch (error) {
+      setSubmitError(error.message || 'Order could not be completed.');
+    } finally {
       setIsSubmitting(false);
-      onOrderSuccess({
-        orderType: orderMode,
-        customerName: formData.name,
-        customerPhone: formData.phone,
-        customerEmail: formData.email,
-        deliveryAddress: orderMode === 'delivery' ? `${formData.address}, ${formData.postcode}` : 'Store Collection',
-        deliveryPostcode: formData.postcode,
-        deliveryNotes: formData.notes,
-        items: cartItems,
-        subtotal,
-        discountAmount: discount,
-        deliveryFee,
-        total,
-        voucherCode: appliedVoucher?.code || null,
-        paymentMethod: formData.paymentMethod,
-        orderTime: formattedTimestamp,
-        createdAt: now.toISOString(),
-        distanceKm: radiusCheck.distanceKm
-      });
-    }, 1200);
+    }
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+      <div className="modal-card checkout-card" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Lock size={18} color="var(--red)" /> Checkout &amp; Order Summary
-            </h3>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-              {orderMode === 'delivery' ? 'Delivery Order - Watford 5 km Zone' : 'Store Collection'}
+            <h3><Lock size={18} /> Checkout</h3>
+            <p className="modal-subtitle">
+              {orderMode === 'delivery' ? 'Delivery order in the Watford zone' : 'Store collection'}
             </p>
           </div>
-          <button className="close-btn" onClick={onClose}><X size={18} /></button>
+          <button className="close-btn" onClick={onClose} aria-label="Close checkout">
+            <X size={18} />
+          </button>
         </div>
 
-        {/* 1-Form All-in-One Body */}
-        <form onSubmit={handleSubmit} className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto', padding: '20px' }}>
-          
-          {/* SECTION 1: CONTACT DETAILS */}
-          <div style={{ marginBottom: '18px' }}>
-            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 800, marginBottom: '10px', color: 'var(--text)' }}>
-              1. Customer Contact Details
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+        <form onSubmit={handleSubmit} className="modal-body checkout-body">
+          {submitError && <div className="form-error">{submitError}</div>}
+
+          <section className="checkout-section">
+            <h4>Customer Contact Details</h4>
+            <div className="checkout-grid">
               <div className="input-group"><User size={16} /><input name="name" placeholder="Full Name *" value={formData.name} onChange={handleChange} required /></div>
               <div className="input-group"><Mail size={16} /><input name="email" type="email" placeholder="Email Address *" value={formData.email} onChange={handleChange} required /></div>
               <div className="input-group"><Phone size={16} /><input name="phone" type="tel" placeholder="Phone Number *" value={formData.phone} onChange={handleChange} required /></div>
             </div>
-          </div>
+          </section>
 
-          {/* SECTION 2: DELIVERY ADDRESS & 5 KM RADIUS */}
-          <div style={{ marginBottom: '18px' }}>
-            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 800, marginBottom: '10px', color: 'var(--text)' }}>
-              2. {orderMode === 'delivery' ? 'Delivery Address & 5 km Radius Check' : 'Store Collection Details'}
-            </h4>
-
+          <section className="checkout-section">
+            <h4>{orderMode === 'delivery' ? 'Delivery Address' : 'Collection Details'}</h4>
             {orderMode === 'delivery' ? (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px', marginBottom: '8px' }}>
+                <div className="checkout-address-grid">
                   <div className="input-group"><MapPin size={16} /><input name="address" placeholder="Street Address *" value={formData.address} onChange={handleChange} required /></div>
                   <div className="input-group"><MapPin size={16} /><input name="postcode" placeholder="Postcode *" value={formData.postcode} onChange={handleChange} required /></div>
                 </div>
-
-                {/* 5 km Delivery Radius Badge */}
-                <div style={{
-                  padding: '10px 14px', borderRadius: 'var(--radius-sm)',
-                  background: radiusCheck.isEligible ? 'var(--green-light)' : '#FEF2F2',
-                  border: radiusCheck.isEligible ? '1px solid #A7F3D0' : '1px solid #FEE2E2',
-                  marginBottom: '10px', fontSize: '0.84rem', fontWeight: 700,
-                  color: radiusCheck.isEligible ? 'var(--green)' : 'var(--red)',
-                  display: 'flex', alignItems: 'center', gap: '8px'
-                }}>
+                <div className={`checkout-radius ${radiusCheck.isEligible ? 'ok' : 'error'}`}>
                   {radiusCheck.isEligible ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
                   <span>{radiusCheck.reason}</span>
                 </div>
-
-                <div className="input-group"><Truck size={16} /><input name="notes" placeholder="Delivery notes for driver (optional)" value={formData.notes} onChange={handleChange} /></div>
+                <div className="input-group"><Truck size={16} /><input name="notes" placeholder="Delivery notes for driver" value={formData.notes} onChange={handleChange} /></div>
               </>
             ) : (
-              <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem' }}>
-                <p><strong>Collection Point:</strong> RFC Watford, 119 Courtlands Drive, Watford WD17 4HZ</p>
-                <p style={{ color: 'var(--green)', fontWeight: 700, marginTop: '4px' }}>⏱️ Ready for pickup in 15-20 minutes</p>
+              <div className="collection-panel">
+                <Store size={18} />
+                <div>
+                  <strong>RFC Watford, 119 Courtlands Drive, Watford WD17 4HZ</strong>
+                  <span>Ready for pickup in 15-20 minutes</span>
+                </div>
               </div>
             )}
-          </div>
+          </section>
 
-          {/* SECTION 3: PAYMENT METHOD */}
-          <div style={{ marginBottom: '18px' }}>
-            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 800, marginBottom: '10px', color: 'var(--text)' }}>
-              3. Payment Method
-            </h4>
-            <div className="payment-options" style={{ marginBottom: '10px' }}>
+          <section className="checkout-section">
+            <h4>Payment Method</h4>
+            <div className="payment-options">
               {[
                 { id: 'card', icon: <CreditCard size={18} />, label: 'Card' },
-                { id: 'apple_pay', icon: <span style={{ fontSize: '1.2rem' }}></span>, label: 'Apple Pay' },
-                { id: 'cash', icon: <Banknote size={18} />, label: 'Cash' },
-              ].map(m => (
-                <label key={m.id} className={`payment-card ${formData.paymentMethod === m.id ? 'selected' : ''}`} onClick={() => setFormData({ ...formData, paymentMethod: m.id })} style={{ padding: '12px' }}>
-                  <input type="radio" name="paymentMethod" value={m.id} checked={formData.paymentMethod === m.id} readOnly />
-                  {m.icon}
-                  <span>{m.label}</span>
+                { id: 'cash', icon: <Banknote size={18} />, label: 'Cash' }
+              ].map((method) => (
+                <label key={method.id} className={`payment-card ${formData.paymentMethod === method.id ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={method.id}
+                    checked={formData.paymentMethod === method.id}
+                    onChange={handleChange}
+                  />
+                  {method.icon}
+                  <span>{method.label}</span>
                 </label>
               ))}
             </div>
 
             {formData.paymentMethod === 'card' && (
-              <div className="card-details">
-                <input name="number" placeholder="Card Number (16 digits)" value={cardData.number} onChange={handleCardChange} required />
-                <div className="flex-row">
-                  <input name="expiry" placeholder="MM/YY" value={cardData.expiry} onChange={handleCardChange} required />
-                  <input name="cvv" type="password" placeholder="CVV" value={cardData.cvv} onChange={handleCardChange} required />
-                </div>
+              <div className="stripe-card-panel">
+                {!stripeConfigured && (
+                  <div className="form-error">Stripe publishable key is missing. Use cash or configure VITE_STRIPE_PUBLISHABLE_KEY.</div>
+                )}
+                <CardElement options={{ hidePostalCode: true }} />
               </div>
             )}
-          </div>
+          </section>
 
-          {/* SECTION 4: ORDER SUMMARY BOX */}
-          <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.95rem', fontWeight: 800, marginBottom: '8px' }}>Order Basket Summary ({cartItems.length} items)</h4>
-            {cartItems.map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: 'var(--text2)', padding: '2px 0' }}>
+          <section className="checkout-summary">
+            <h4>Order Basket Summary ({cartItems.length} items)</h4>
+            {cartItems.map((item, index) => (
+              <div key={`${item.id}-${index}`} className="summary-row">
                 <span>{item.quantity}x {item.name}</span>
-                <span style={{ fontWeight: 700 }}>£{(item.price * item.quantity).toFixed(2)}</span>
+                <span>GBP {(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
-            <hr style={{ margin: '10px 0', border: 'none', borderTop: '1px solid var(--border)' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}><span>Subtotal</span><span>£{subtotal.toFixed(2)}</span></div>
-            {discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--green)', fontWeight: 700 }}><span>Discount ({appliedVoucher?.code})</span><span>-£{discount.toFixed(2)}</span></div>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}><span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `£${deliveryFee.toFixed(2)}`}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 900, color: 'var(--red)', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
-              <span>Total Amount</span>
-              <span>£{total.toFixed(2)}</span>
-            </div>
-          </div>
+            <div className="summary-divider" />
+            <div className="summary-row"><span>Subtotal</span><span>GBP {subtotal.toFixed(2)}</span></div>
+            {discount > 0 && <div className="summary-row discount"><span>Discount ({appliedVoucher?.code})</span><span>-GBP {discount.toFixed(2)}</span></div>}
+            <div className="summary-row"><span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `GBP ${deliveryFee.toFixed(2)}`}</span></div>
+            <div className="summary-total"><span>Total Amount</span><span>GBP {total.toFixed(2)}</span></div>
+          </section>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="btn-submit-modal"
-            disabled={!isValid || isSubmitting}
-            style={{ width: '100%', marginTop: '18px', padding: '16px', fontSize: '1.05rem' }}
-          >
-            {isSubmitting ? 'Processing Order...' : <><Lock size={18} /> Complete &amp; Pay — £{total.toFixed(2)}</>}
+          <button type="submit" className="btn-submit-modal checkout-submit" disabled={!isValid || isSubmitting}>
+            {isSubmitting ? 'Processing...' : <><Lock size={18} /> Complete Order - GBP {total.toFixed(2)}</>}
           </button>
         </form>
       </div>
     </div>
   );
 }
+
+CheckoutModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  cartItems: PropTypes.array,
+  orderMode: PropTypes.oneOf(['delivery', 'collection']).isRequired,
+  appliedVoucher: PropTypes.object,
+  onOrderSuccess: PropTypes.func.isRequired
+};
+
+CheckoutForm.propTypes = {
+  ...CheckoutModal.propTypes,
+  stripeConfigured: PropTypes.bool.isRequired
+};

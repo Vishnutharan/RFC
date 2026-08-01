@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import Banner from './components/Banner';
@@ -12,71 +12,77 @@ import AdminLoginModal from './components/AdminLoginModal';
 import CustomerDashboard from './components/CustomerDashboard';
 import PrintReceiptModal from './components/PrintReceiptModal';
 import Toast from './components/Toast';
-
-import { MENU_ITEMS, CATEGORIES } from './data/initialMenu';
-import { cancelOrder, getCurrentSession, getMenuItems, validateVoucher, placeOrder } from './services/api';
+import ErrorBoundary from './components/ErrorBoundary';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import { CATEGORIES } from './data/initialMenu';
+import { getMenuItems } from './services/api';
+import { useAuth } from './hooks/useAuth';
+import { useCart } from './hooks/useCart';
+import { useOrders } from './hooks/useOrders';
 import './styles/main.css';
 
 export default function App() {
-  // Navigation & Search State
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [orderMode, setOrderMode] = useState('delivery');
   const [isAdminView, setIsAdminView] = useState(false);
-  const [adminUser, setAdminUser] = useState(null);
+  const [menuItems, setMenuItems] = useState([]);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
 
-  // Data state
-  const [menuItems, setMenuItems] = useState(MENU_ITEMS);
-  const [userOrders, setUserOrders] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Cart State
-  const [cartItems, setCartItems] = useState([]);
-  const [appliedVoucher, setAppliedVoucher] = useState(null);
-
-  // UI Modals
   const [selectedItemForModal, setSelectedItemForModal] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isCustomerDashboardOpen, setIsCustomerDashboardOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [printReceiptOrder, setPrintReceiptOrder] = useState(null);
-  const [activeOrder, setActiveOrder] = useState(null);
-
-  // Toast Notifications
   const [toasts, setToasts] = useState([]);
 
   const showToast = useCallback((message, type = 'success') => {
     const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
     }, 3500);
   }, []);
 
-  // Load menu and user order history on mount
+  const { adminUser, setAdminUser } = useAuth();
+  const cart = useCart(showToast);
+  const orders = useOrders(showToast);
+
   useEffect(() => {
-    setIsLoading(true);
-    getMenuItems().then(items => {
-      if (items && items.length > 0) setMenuItems(items);
-      setIsLoading(false);
-    });
+    let isActive = true;
+    setIsLoadingMenu(true);
 
-    getCurrentSession()
-      .then(session => {
-        if (session?.role === 'staff' || session?.role === 'manager') {
-          setAdminUser(session);
-        }
+    getMenuItems()
+      .then((items) => {
+        if (!isActive) return;
+        setMenuItems(Array.isArray(items) ? items : []);
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (!isActive) return;
+        setMenuItems([]);
+        showToast(error.message || 'Menu could not be loaded.', 'error');
+      })
+      .finally(() => {
+        if (isActive) setIsLoadingMenu(false);
+      });
 
-    try {
-      const recent = JSON.parse(localStorage.getItem('rfc_recent_orders') || '[]');
-      setUserOrders(Array.isArray(recent) ? recent : []);
-    } catch {
-      setUserOrders([]);
-    }
-  }, []);
+    return () => {
+      isActive = false;
+    };
+  }, [showToast]);
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return menuItems.filter((item) => {
+      const matchesCategory = activeCategory === 'all' || item.categoryId === activeCategory;
+      const matchesSearch = !query ||
+        item.name?.toLowerCase().includes(query) ||
+        (item.description || '').toLowerCase().includes(query);
+      return matchesCategory && matchesSearch;
+    });
+  }, [activeCategory, menuItems, searchQuery]);
 
   const handleStaffPanelClick = useCallback(() => {
     if (isAdminView) {
@@ -92,190 +98,46 @@ export default function App() {
     setIsAdminLoginOpen(true);
   }, [adminUser, isAdminView]);
 
-  // Handle item selection
   const handleSelectItem = useCallback((item) => {
     if (item.hasOptions) {
       setSelectedItemForModal(item);
-    } else {
-      const cartEntry = {
-        id: `${item.id}-${Date.now()}`,
-        name: item.name,
-        price: item.price,
-        unitPrice: item.price,
-        quantity: 1,
-        options: [],
-        selectedSide: '',
-        selectedDrink: '',
-        item: item
-      };
-      setCartItems(prev => [...prev, cartEntry]);
-      showToast(`Added ${item.name} to basket!`);
+      return;
     }
-  }, [showToast]);
 
-  // Handle add-to-cart from customization modal
+    cart.addMenuItem(item);
+  }, [cart]);
+
   const handleAddToCart = useCallback((cartPayload) => {
-    const options = [];
-    if (cartPayload.selectedSide) options.push(cartPayload.selectedSide);
-    if (cartPayload.selectedDrink) options.push(cartPayload.selectedDrink);
+    cart.addCustomizedItem(cartPayload);
+    setSelectedItemForModal(null);
+  }, [cart]);
 
-    const cartEntry = {
-      id: `${cartPayload.item.id}-${Date.now()}`,
-      name: cartPayload.item.name,
-      price: cartPayload.unitPrice,
-      unitPrice: cartPayload.unitPrice,
-      quantity: cartPayload.quantity,
-      options: options,
-      selectedSide: cartPayload.selectedSide,
-      selectedDrink: cartPayload.selectedDrink,
-      item: cartPayload.item
-    };
-
-    setCartItems(prev => [...prev, cartEntry]);
-    showToast(`Added ${cartPayload.item.name} to basket!`);
-  }, [showToast]);
-
-  // 1-Click Reorder
   const handleReorder = useCallback((pastOrder) => {
-    if (!pastOrder.items || pastOrder.items.length === 0) return;
-    setCartItems(pastOrder.items);
+    if (!cart.reorder(pastOrder)) return;
     setIsCustomerDashboardOpen(false);
     setIsCartOpen(true);
-    showToast('Reordered past items into your basket! 🛒');
-  }, [showToast]);
+  }, [cart]);
 
-  // Order Cancellation Handler
   const handleCancelOrder = useCallback(async (orderIdOrNumber, cancellationReason) => {
-    setUserOrders(prev => prev.map(o => {
-      if (o.id === orderIdOrNumber || o.orderNumber === orderIdOrNumber) {
-        return { ...o, orderStatus: 'Cancelled', cancellationReason };
-      }
-      return o;
-    }));
-
-    if (activeOrder && (activeOrder.id === orderIdOrNumber || activeOrder.orderNumber === orderIdOrNumber)) {
-      setActiveOrder(prev => ({ ...prev, orderStatus: 'Cancelled', cancellationReason }));
-    }
-
     try {
-      await cancelOrder(orderIdOrNumber, cancellationReason);
-      showToast('Order cancelled successfully.', 'info');
+      await orders.cancelExistingOrder(orderIdOrNumber, cancellationReason);
     } catch (error) {
       showToast(error.message || 'Could not cancel order online. Please call the store.', 'error');
     }
-  }, [activeOrder, showToast]);
+  }, [orders, showToast]);
 
-  // Cart quantity update
-  const handleUpdateQty = useCallback((idOrIndex, newQty) => {
-    if (newQty <= 0) {
-      handleRemoveItem(idOrIndex);
-      return;
-    }
-    setCartItems(prev =>
-      prev.map((item, idx) => {
-        if (item.id === idOrIndex || idx === idOrIndex) {
-          return { ...item, quantity: newQty };
-        }
-        return item;
-      })
-    );
-  }, []);
-
-  // Remove cart item
-  const handleRemoveItem = useCallback((idOrIndex) => {
-    setCartItems(prev => prev.filter((item, idx) => item.id !== idOrIndex && idx !== idOrIndex));
-    showToast('Item removed from basket', 'info');
-  }, [showToast]);
-
-  // Voucher handling
-  const handleApplyVoucher = useCallback((codeOrResult) => {
-    if (typeof codeOrResult === 'string') {
-      const subtotal = cartItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-      const result = validateVoucher(codeOrResult, subtotal);
-      if (result.valid) {
-        setAppliedVoucher(result);
-        showToast(`Voucher ${result.code} applied! ${result.discountPercent}% off`);
-      }
-      return result;
-    }
-    if (codeOrResult && codeOrResult.valid) {
-      setAppliedVoucher(codeOrResult);
-      showToast(`Voucher ${codeOrResult.code} applied! ${codeOrResult.discountPercent}% off`);
-    }
-    return codeOrResult;
-  }, [cartItems, showToast]);
-
-  const handleRemoveVoucher = useCallback(() => {
-    setAppliedVoucher(null);
-    showToast('Voucher removed', 'info');
-  }, [showToast]);
-
-  // Checkout flow
-  const handleProceedToCheckout = useCallback(() => {
-    setIsCartOpen(false);
-    setIsCheckoutOpen(true);
-  }, []);
-
-  // Order placement
   const handleOrderSuccess = useCallback(async (orderPayload) => {
-    const subtotal = cartItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-    const discountAmount = appliedVoucher ? (subtotal * appliedVoucher.discountPercent / 100) : 0;
-    const total = subtotal - discountAmount;
-    const now = new Date();
-    const formattedTimestamp = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + now.toLocaleTimeString('en-GB');
-
-    const payload = orderPayload || {
-      orderType: orderMode,
-      customerName: 'Customer',
-      customerPhone: '+44 7000 000000',
-      customerEmail: 'customer@rfc.com',
-      deliveryAddress: orderMode === 'delivery' ? '37 Berry Avenue' : 'Store Collection',
-      deliveryPostcode: 'WD24 6RU',
-      items: cartItems,
-      subtotal,
-      discountAmount,
-      deliveryFee: 0,
-      total,
-      voucherCode: appliedVoucher?.code || null,
-      paymentMethod: 'card',
-      orderTime: formattedTimestamp,
-      createdAt: now.toISOString()
-    };
-
-    try {
-      const savedOrder = await placeOrder(payload);
-      setIsCheckoutOpen(false);
-      setCartItems([]);
-      setAppliedVoucher(null);
-      setActiveOrder(savedOrder);
-      setUserOrders(prev => {
-        const next = [savedOrder, ...prev].slice(0, 20);
-        localStorage.setItem('rfc_recent_orders', JSON.stringify(next));
-        return next;
-      });
-      showToast(`Order #${savedOrder.orderNumber} placed successfully!`);
-    } catch (error) {
-      showToast(error.message || 'Order could not be placed. Please try again.', 'error');
-    }
-  }, [cartItems, appliedVoucher, orderMode, showToast]);
-
-  // Filter menu items
-  const filteredItems = menuItems.filter(item => {
-    const matchesCategory = activeCategory === 'all' || item.categoryId === activeCategory;
-    const matchesSearch = !searchQuery ||
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const savedOrder = await orders.submitOrder(orderPayload);
+    setIsCheckoutOpen(false);
+    setIsCartOpen(false);
+    cart.clearCart();
+    return savedOrder;
+  }, [cart, orders]);
 
   return (
     <div className="app-container">
-      {/* Header */}
       <Header
-        cartCount={cartCount}
+        cartCount={cart.cartCount}
         orderMode={orderMode}
         setOrderMode={setOrderMode}
         searchQuery={searchQuery}
@@ -287,141 +149,141 @@ export default function App() {
         onStaffPanelClick={handleStaffPanelClick}
       />
 
-      {/* View Switcher */}
       {isAdminView && adminUser ? (
-        <AdminDashboard showToast={showToast} adminUser={adminUser} onExit={() => setIsAdminView(false)} />
-      ) : activeOrder ? (
-        <OrderTracker
-          order={activeOrder}
-          onNewOrder={() => setActiveOrder(null)}
-          onCancelOrder={handleCancelOrder}
-        />
+        <ErrorBoundary title="Staff dashboard failed">
+          <AdminDashboard showToast={showToast} adminUser={adminUser} onExit={() => setIsAdminView(false)} />
+        </ErrorBoundary>
+      ) : orders.activeOrder ? (
+        <ErrorBoundary title="Order tracker failed">
+          <OrderTracker
+            order={orders.activeOrder}
+            onNewOrder={() => orders.setActiveOrder(null)}
+            onCancelOrder={handleCancelOrder}
+            showToast={showToast}
+          />
+        </ErrorBoundary>
       ) : (
         <>
-          {/* Sticky Category Tabs */}
           <Navigation
             activeCategory={activeCategory}
             setActiveCategory={setActiveCategory}
           />
 
-          {/* Hero & Promotional Banner */}
           <Banner
-            onApplyVoucher={handleApplyVoucher}
+            onApplyVoucher={cart.applyVoucher}
             showToast={showToast}
           />
 
-          {/* Main Menu Grid */}
           <main id="menu" className="menu-main-container">
             <div className="section-header">
               <h2>
                 {activeCategory === 'all'
                   ? 'Full RFC Menu'
-                  : CATEGORIES.find(c => c.id === activeCategory)?.name || 'Menu'}
+                  : CATEGORIES.find((category) => category.id === activeCategory)?.name || 'Menu'}
               </h2>
-              <span className="item-count">
-                {filteredItems.length} items available
-              </span>
+              <span className="item-count">{filteredItems.length} items available</span>
             </div>
 
-            {isLoading ? (
+            {isLoadingMenu ? (
               <div className="menu-grid">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="skeleton-card">
-                    <div className="skeleton skeleton-img"></div>
-                    <div className="skeleton skeleton-text"></div>
-                    <div className="skeleton skeleton-text short"></div>
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <div key={index} className="skeleton-card">
+                    <div className="skeleton skeleton-img" />
+                    <div className="skeleton skeleton-text" />
+                    <div className="skeleton skeleton-text short" />
                   </div>
                 ))}
               </div>
             ) : filteredItems.length === 0 ? (
               <div className="empty-menu-state">
                 <h3>No menu items found</h3>
-                <p>Try searching for something else or pick a different category.</p>
+                <p>Try another category, search term, or check that the database has seeded menu data.</p>
               </div>
             ) : (
-              <div className="menu-grid">
-                {filteredItems.map((item, index) => (
-                  <MenuItemCard
-                    key={item.id}
-                    item={item}
-                    index={index}
-                    onSelectItem={handleSelectItem}
-                  />
-                ))}
-              </div>
+              <ErrorBoundary title="Menu failed">
+                <div className="menu-grid">
+                  {filteredItems.map((item, index) => (
+                    <MenuItemCard
+                      key={item.id}
+                      item={item}
+                      index={index}
+                      onSelectItem={handleSelectItem}
+                    />
+                  ))}
+                </div>
+              </ErrorBoundary>
             )}
           </main>
 
-          {/* Footer */}
           <footer className="app-footer">
             <div className="footer-content">
               <div className="footer-brand">
                 <span className="footer-logo">RFC</span>
-                <p>RFC Watford — Fresh Crispy Chicken Since 2018</p>
-                <p className="footer-address">119 Courtlands Drive, Watford WD17 4HZ • +44 1923 961864</p>
+                <p>RFC Watford - Fresh Crispy Chicken Since 2018</p>
+                <p className="footer-address">119 Courtlands Drive, Watford WD17 4HZ - +44 1923 961864</p>
               </div>
               <div className="footer-links">
                 <span>Adults need around 2000 kcal a day</span>
                 <a href="https://www.rfcchickenwatford.com/terms" target="_blank" rel="noreferrer">Terms</a>
-                <a href="https://www.rfcchickenwatford.com/privacy" target="_blank" rel="noreferrer">Privacy</a>
+                <button type="button" className="footer-link-button" onClick={() => setIsPrivacyOpen(true)}>Privacy</button>
               </div>
             </div>
           </footer>
         </>
       )}
 
-      {!isAdminView && !activeOrder && cartCount > 0 && (
+      {!isAdminView && !orders.activeOrder && cart.cartCount > 0 && (
         <button className="floating-cart-cta" onClick={() => setIsCartOpen(true)}>
-          <span>{cartCount} item{cartCount === 1 ? '' : 's'} in basket</span>
-          <strong>£{cartSubtotal.toFixed(2)}</strong>
+          <span>{cart.cartCount} item{cart.cartCount === 1 ? '' : 's'} in basket</span>
+          <strong>GBP {cart.cartSubtotal.toFixed(2)}</strong>
         </button>
       )}
 
-      {/* Item Customization Modal */}
       <ItemModal
         item={selectedItemForModal}
         onClose={() => setSelectedItemForModal(null)}
         onAddToCart={handleAddToCart}
       />
 
-      {/* Cart Drawer */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
-        cartItems={cartItems}
-        onUpdateQty={handleUpdateQty}
-        onRemoveItem={handleRemoveItem}
-        appliedVoucher={appliedVoucher}
-        onApplyVoucher={handleApplyVoucher}
-        onRemoveVoucher={handleRemoveVoucher}
+        cartItems={cart.cartItems}
+        onUpdateQty={cart.updateQuantity}
+        onRemoveItem={cart.removeItem}
+        appliedVoucher={cart.appliedVoucher}
+        onApplyVoucher={cart.applyVoucher}
+        onRemoveVoucher={cart.removeVoucher}
         orderMode={orderMode}
-        onProceedToCheckout={handleProceedToCheckout}
+        onProceedToCheckout={() => {
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
+        }}
       />
 
-      {/* Checkout Modal */}
-      <CheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        cartItems={cartItems}
-        orderMode={orderMode}
-        appliedVoucher={appliedVoucher}
-        onOrderSuccess={handleOrderSuccess}
-      />
+      <ErrorBoundary title="Checkout failed">
+        <CheckoutModal
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+          cartItems={cart.cartItems}
+          orderMode={orderMode}
+          appliedVoucher={cart.appliedVoucher}
+          onOrderSuccess={handleOrderSuccess}
+        />
+      </ErrorBoundary>
 
-      {/* Customer Account & Loyalty Portal */}
       <CustomerDashboard
         isOpen={isCustomerDashboardOpen}
         onClose={() => setIsCustomerDashboardOpen(false)}
-        orders={userOrders}
+        orders={orders.userOrders}
         onReorder={handleReorder}
-        onPrintReceipt={(ord) => setPrintReceiptOrder(ord)}
+        onPrintReceipt={(order) => setPrintReceiptOrder(order)}
         onCancelOrder={handleCancelOrder}
         showToast={showToast}
       />
 
-      {/* Print Receipt Modal */}
       <PrintReceiptModal
-        isOpen={!!printReceiptOrder}
+        isOpen={Boolean(printReceiptOrder)}
         onClose={() => setPrintReceiptOrder(null)}
         order={printReceiptOrder}
       />
@@ -437,7 +299,7 @@ export default function App() {
         }}
       />
 
-      {/* Toast Notifications */}
+      <PrivacyPolicy isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
       <Toast toasts={toasts} />
     </div>
   );

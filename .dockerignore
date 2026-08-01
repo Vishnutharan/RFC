@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+.env
+.env.local
+backend/bin
+backend/obj
+backend/build-check
+**/.DS_Store

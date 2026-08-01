@@ -8,23 +8,27 @@ using Microsoft.EntityFrameworkCore;
 using RFC.Api.Data;
 using RFC.Api.Models;
 using RFC.Api.Security;
+using RFC.Api.Services;
 
 namespace RFC.Api.Controllers;
 
 [ApiController]
+[RequestSizeLimit(1_048_576)]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private static readonly List<DbCustomer> InMemoryCustomers = new();
+    private const string ServiceUnavailableMessage = "Service temporarily unavailable. Please try again shortly.";
+    private static readonly TimeSpan FailedAttemptWindow = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(30);
 
     private readonly RfcDbContext? _db;
-    private readonly IConfiguration _configuration;
+    private readonly AuditService? _audit;
     private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IServiceProvider provider, IConfiguration configuration, ILogger<AuthController> logger)
+    public AuthController(IServiceProvider provider, ILogger<AuthController> logger)
     {
         _db = provider.GetService<RfcDbContext>();
-        _configuration = configuration;
+        _audit = provider.GetService<AuditService>();
         _logger = logger;
     }
 
@@ -32,95 +36,118 @@ public class AuthController : ControllerBase
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> AdminLogin([FromBody] LoginRequest request)
     {
-        var configuredEmail = _configuration["Admin:Email"];
-        var configuredHash = _configuration["Admin:PasswordHash"];
-        var configuredRole = _configuration["Admin:Role"] ?? "staff";
+        if (_db == null) return ServiceUnavailable();
 
-        if (string.IsNullOrWhiteSpace(configuredEmail) || string.IsNullOrWhiteSpace(configuredHash))
+        var email = NormalizeEmail(request.Email);
+        try
         {
-            _logger.LogError("Admin login attempted but Admin:Email or Admin:PasswordHash is not configured.");
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Admin login is not configured." });
-        }
+            if (await IsLockedOutAsync(email))
+            {
+                _logger.LogWarning("Locked staff login attempt for {Email}", email);
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
 
-        var emailMatches = string.Equals(configuredEmail.Trim(), request.Email.Trim(), StringComparison.OrdinalIgnoreCase);
-        var passwordMatches = emailMatches && PasswordHasher.Verify(request.Password, configuredHash);
-        if (!passwordMatches)
+            var staff = await _db.StaffUsers.FirstOrDefaultAsync(user => user.Email == email && user.IsActive);
+            if (staff == null || !PasswordHasher.Verify(request.Password, staff.PasswordHash))
+            {
+                await RecordFailedLoginAsync(email);
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
+
+            await ClearFailedLoginAsync(email);
+            var user = new AuthUserDto(staff.Id, staff.Name, staff.Email, staff.Role);
+            await SignInAsync(user, isPersistent: false);
+            if (_audit != null) await _audit.LogAsync("Login", "StaffUser", staff.Id, null, new { staff.Email, staff.Role });
+            return Ok(user);
+        }
+        catch (Exception ex)
         {
-            _logger.LogWarning("Failed admin login for {Email}", request.Email);
-            return Unauthorized(new { message = "Invalid email or password." });
+            _logger.LogError(ex, "Staff login failed for {Email}", email);
+            return ServiceUnavailable();
         }
-
-        var user = new AuthUserDto("staff-admin", "RFC Staff", configuredEmail, configuredRole);
-        await SignInAsync(user, isPersistent: false);
-        return Ok(user);
     }
 
     [HttpPost("customers/register")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> RegisterCustomer([FromBody] CustomerRegisterRequest request)
     {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var exists = _db != null
-            ? await _db.Customers.AnyAsync(c => c.Email.ToLower() == email)
-            : InMemoryCustomers.Any(c => string.Equals(c.Email, email, StringComparison.OrdinalIgnoreCase));
-
-        if (exists)
+        if (_db == null) return ServiceUnavailable();
+        if (!PasswordPolicy.IsValid(request.Password))
         {
-            return Conflict(new { message = "An account already exists for this email." });
+            return BadRequest(new { message = PasswordPolicy.Message });
         }
 
-        var customer = new DbCustomer
+        if (!request.ConsentAccepted)
         {
-            Id = Guid.NewGuid().ToString(),
-            Name = request.Name.Trim(),
-            Email = email,
-            Phone = request.Phone.Trim(),
-            Address = request.Address.Trim(),
-            Postcode = request.Postcode.Trim().ToUpperInvariant(),
-            PasswordHash = PasswordHasher.Hash(request.Password),
-            CreatedAt = DateTime.UtcNow
-        };
+            return BadRequest(new { message = "Privacy policy consent is required." });
+        }
 
-        if (_db != null)
+        var email = NormalizeEmail(request.Email);
+        try
         {
-            try
+            var exists = await _db.Customers.AnyAsync(c => c.Email == email);
+            if (exists)
             {
-                _db.Customers.Add(customer);
-                await _db.SaveChangesAsync();
+                return Conflict(new { message = "An account already exists for this email." });
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to create customer account for {Email}", email);
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Account could not be created." });
-            }
-        }
-        else
-        {
-            InMemoryCustomers.Add(customer);
-        }
 
-        var user = ToCustomerDto(customer);
-        await SignInAsync(user, isPersistent: true);
-        return Ok(user);
+            var customer = new DbCustomer
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Name = InputSanitizer.Clean(request.Name, 100),
+                Email = email,
+                Phone = InputSanitizer.Clean(request.Phone, 30),
+                Address = InputSanitizer.Clean(request.Address, 400),
+                Postcode = InputSanitizer.Clean(request.Postcode, 20).ToUpperInvariant(),
+                PasswordHash = PasswordHasher.Hash(request.Password),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.Customers.Add(customer);
+            await _db.SaveChangesAsync();
+
+            var user = ToCustomerDto(customer);
+            await SignInAsync(user, isPersistent: true);
+            return Ok(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create customer account for {Email}", email);
+            return ServiceUnavailable();
+        }
     }
 
     [HttpPost("customers/login")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> LoginCustomer([FromBody] LoginRequest request)
     {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var customer = _db != null
-            ? await _db.Customers.FirstOrDefaultAsync(c => c.Email.ToLower() == email)
-            : InMemoryCustomers.FirstOrDefault(c => string.Equals(c.Email, email, StringComparison.OrdinalIgnoreCase));
+        if (_db == null) return ServiceUnavailable();
 
-        if (customer == null || !PasswordHasher.Verify(request.Password, customer.PasswordHash))
+        var email = NormalizeEmail(request.Email);
+        try
         {
-            return Unauthorized(new { message = "Invalid email or password." });
-        }
+            if (await IsLockedOutAsync(email))
+            {
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
 
-        var user = ToCustomerDto(customer);
-        await SignInAsync(user, isPersistent: true);
-        return Ok(user);
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Email == email);
+            if (customer == null || !PasswordHasher.Verify(request.Password, customer.PasswordHash))
+            {
+                await RecordFailedLoginAsync(email);
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
+
+            await ClearFailedLoginAsync(email);
+            var user = ToCustomerDto(customer);
+            await SignInAsync(user, isPersistent: true);
+            return Ok(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Customer login failed for {Email}", email);
+            return ServiceUnavailable();
+        }
     }
 
     [HttpGet("me")]
@@ -131,59 +158,168 @@ public class AuthController : ControllerBase
             return Ok(null);
         }
 
+        if (_db == null) return ServiceUnavailable();
+
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-        if (role == "customer" && _db != null)
-        {
-            var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var customer = await _db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
-            if (customer != null) return Ok(ToCustomerDto(customer));
-        }
 
-        if (role == "customer")
+        try
         {
-            var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var customer = InMemoryCustomers.FirstOrDefault(c => c.Id == id);
-            if (customer != null) return Ok(ToCustomerDto(customer));
-        }
+            if (role == "customer")
+            {
+                var customer = await _db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+                return customer == null ? Unauthorized() : Ok(ToCustomerDto(customer));
+            }
 
-        return Ok(new AuthUserDto(
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,
-            User.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
-            User.FindFirstValue(ClaimTypes.Email) ?? string.Empty,
-            role));
+            var staff = await _db.StaffUsers.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id && s.IsActive);
+            return staff == null
+                ? Unauthorized()
+                : Ok(new AuthUserDto(staff.Id, staff.Name, staff.Email, staff.Role));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load current session.");
+            return ServiceUnavailable();
+        }
     }
 
     [Authorize(Policy = "CustomerOnly")]
     [HttpPut("customers/me")]
     public async Task<IActionResult> UpdateCustomer([FromBody] CustomerUpdateRequest request)
     {
+        if (_db == null) return ServiceUnavailable();
+
         var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var customer = _db != null
-            ? await _db.Customers.FirstOrDefaultAsync(c => c.Id == id)
-            : InMemoryCustomers.FirstOrDefault(c => c.Id == id);
-
-        if (customer == null) return NotFound(new { message = "Customer account not found." });
-
-        customer.Name = request.Name.Trim();
-        customer.Phone = request.Phone.Trim();
-        customer.Address = request.Address.Trim();
-        customer.Postcode = request.Postcode.Trim().ToUpperInvariant();
-        customer.UpdatedAt = DateTime.UtcNow;
-        if (_db != null)
+        try
         {
-            await _db.SaveChangesAsync();
-        }
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == id);
+            if (customer == null) return NotFound(new { message = "Customer account not found." });
 
-        var user = ToCustomerDto(customer);
-        await SignInAsync(user, isPersistent: true);
-        return Ok(user);
+            customer.Name = InputSanitizer.Clean(request.Name, 100);
+            customer.Phone = InputSanitizer.Clean(request.Phone, 30);
+            customer.Address = InputSanitizer.Clean(request.Address, 400);
+            customer.Postcode = InputSanitizer.Clean(request.Postcode, 20).ToUpperInvariant();
+            customer.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            var user = ToCustomerDto(customer);
+            await SignInAsync(user, isPersistent: true);
+            return Ok(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update customer {CustomerId}", id);
+            return ServiceUnavailable();
+        }
+    }
+
+    [Authorize(Policy = "CustomerOnly")]
+    [HttpDelete("customers/me")]
+    public async Task<IActionResult> DeleteCustomer()
+    {
+        if (_db == null) return ServiceUnavailable();
+
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == id);
+            if (customer == null) return NotFound(new { message = "Customer account not found." });
+
+            var anonymousEmail = $"deleted-{customer.Id}@deleted.local";
+            var orders = await _db.Orders.Where(order => order.CustomerEmail == customer.Email).ToListAsync();
+            foreach (var order in orders)
+            {
+                order.CustomerName = "Deleted Customer";
+                order.CustomerEmail = anonymousEmail;
+                order.CustomerPhone = string.Empty;
+                order.DeliveryAddress = "Anonymised";
+                order.DeliveryPostcode = string.Empty;
+                order.DeliveryNotes = string.Empty;
+            }
+
+            customer.Name = "Deleted Customer";
+            customer.Email = anonymousEmail;
+            customer.Phone = string.Empty;
+            customer.Address = "Anonymised";
+            customer.Postcode = string.Empty;
+            customer.PasswordHash = PasswordHasher.Hash(Guid.NewGuid().ToString("N") + "Aa1");
+            customer.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete customer {CustomerId}", id);
+            return ServiceUnavailable();
+        }
     }
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (_audit != null && !string.IsNullOrWhiteSpace(userId))
+        {
+            await _audit.LogAsync("Logout", role == "customer" ? "Customer" : "StaffUser", userId);
+        }
+
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return Ok(new { success = true });
+    }
+
+    private async Task<bool> IsLockedOutAsync(string email)
+    {
+        if (_db == null) return false;
+
+        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == email);
+        return attempt?.LockedUntil != null && attempt.LockedUntil > DateTime.UtcNow;
+    }
+
+    private async Task RecordFailedLoginAsync(string email)
+    {
+        if (_db == null) return;
+
+        var now = DateTime.UtcNow;
+        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == email);
+        if (attempt == null)
+        {
+            attempt = new LoginAttempt
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Email = email,
+                AttemptCount = 1,
+                LastAttemptAt = now
+            };
+            _db.LoginAttempts.Add(attempt);
+        }
+        else
+        {
+            attempt.AttemptCount = attempt.LastAttemptAt < now.Subtract(FailedAttemptWindow)
+                ? 1
+                : attempt.AttemptCount + 1;
+            attempt.LastAttemptAt = now;
+        }
+
+        if (attempt.AttemptCount >= 5)
+        {
+            attempt.LockedUntil = now.Add(LockoutDuration);
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task ClearFailedLoginAsync(string email)
+    {
+        if (_db == null) return;
+
+        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == email);
+        if (attempt == null) return;
+
+        _db.LoginAttempts.Remove(attempt);
+        await _db.SaveChangesAsync();
     }
 
     private async Task SignInAsync(AuthUserDto user, bool isPersistent)
@@ -220,5 +356,12 @@ public class AuthController : ControllerBase
             customer.Phone,
             customer.Address,
             customer.Postcode);
+    }
+
+    private static string NormalizeEmail(string email) => InputSanitizer.Clean(email, 120).ToLowerInvariant();
+
+    private ObjectResult ServiceUnavailable()
+    {
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ServiceUnavailableMessage });
     }
 }

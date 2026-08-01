@@ -1,145 +1,164 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, Clock, ChefHat, Bike, Home, ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
+import { AlertTriangle, ArrowLeft, Bike, CheckCircle, ChefHat, Clock, Home, Printer } from 'lucide-react';
 import PrintReceiptModal from './PrintReceiptModal';
 import CancelOrderModal from './CancelOrderModal';
+import { useSignalR } from '../hooks/useSignalR';
+
+const STORE_LOCATION = { lat: 51.6742, lng: -0.4085 };
+const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const STEPS = [
-  { label: 'Order Placed', icon: CheckCircle, msg: 'Your order has been received!' },
-  { label: 'In Kitchen', icon: ChefHat, msg: 'Our chefs are preparing your food...' },
-  { label: 'Out for Delivery', icon: Bike, msg: 'Your order is on its way!' },
-  { label: 'Delivered', icon: Home, msg: 'Enjoy your meal.' },
+  { label: 'Order Placed', status: 'Placed', icon: CheckCircle, msg: 'Your order has been received.' },
+  { label: 'In Kitchen', status: 'Preparing', icon: ChefHat, msg: 'Our team is preparing your food.' },
+  { label: 'On Its Way', status: 'Out for Delivery', icon: Bike, msg: 'Your order is on its way.' },
+  { label: 'Delivered', status: 'Completed', icon: Home, msg: 'Enjoy your meal.' }
 ];
+
+const STATUS_STEP = {
+  Placed: 1,
+  Preparing: 2,
+  'Ready for Collection': 3,
+  'Out for Delivery': 3,
+  Completed: 4,
+  Delivered: 4
+};
 
 const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
 const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
 
-export default function OrderTracker({ order, onNewOrder, onCancelOrder }) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [timeLeft, setTimeLeft] = useState(55 * 60);
+export default function OrderTracker({ order, onNewOrder, onCancelOrder, showToast }) {
+  const [trackedOrder, setTrackedOrder] = useState(order);
+  const [timeLeft, setTimeLeft] = useState((order?.etaMinutes || 55) * 60);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setTimeLeft(t => Math.max(0, t - 1)), 1000);
-    const t1 = setTimeout(() => setCurrentStep(2), 8000);
-    const t2 = setTimeout(() => setCurrentStep(3), 18000);
-    const t3 = setTimeout(() => setCurrentStep(4), 35000);
-    return () => { clearInterval(timer); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    setTrackedOrder(order);
+    setTimeLeft((order?.etaMinutes || 55) * 60);
+  }, [order]);
+
+  const handleStatusUpdated = useCallback((payload) => {
+    setTrackedOrder((prev) => ({
+      ...prev,
+      orderStatus: payload.status,
+      etaMinutes: payload.etaMinutes ?? prev?.etaMinutes
+    }));
+    if (payload.etaMinutes) setTimeLeft(payload.etaMinutes * 60);
+    showToast?.(`Your order is now ${payload.status}.`, 'info');
+  }, [showToast]);
+
+  const { isConnected } = useSignalR(trackedOrder?.orderNumber, handleStatusUpdated);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTimeLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => clearInterval(timer);
   }, []);
 
+  const status = trackedOrder?.orderStatus || 'Placed';
+  const isCancelled = status === 'Cancelled';
+  const currentStep = STATUS_STEP[status] || 1;
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
+  const canCancel = !isCancelled && (status === 'Placed' || status === 'Preparing');
+  const showDeliveryMap = trackedOrder?.orderType === 'delivery' &&
+    status === 'Out for Delivery' &&
+    trackedOrder.deliveryLat &&
+    trackedOrder.deliveryLng;
+  const deliveryDestination = useMemo(() => showDeliveryMap ? {
+    lat: Number(trackedOrder.deliveryLat),
+    lng: Number(trackedOrder.deliveryLng)
+  } : null, [showDeliveryMap, trackedOrder?.deliveryLat, trackedOrder?.deliveryLng]);
 
-  const isCancelled = order?.orderStatus === 'Cancelled';
+  const statusMessage = useMemo(() => {
+    if (isCancelled) return `Reason: ${trackedOrder?.cancellationReason || 'Order was cancelled.'}`;
+    return STEPS[Math.max(0, currentStep - 1)]?.msg || 'Your order is being updated.';
+  }, [currentStep, isCancelled, trackedOrder]);
 
   return (
     <div className="tracker-container">
       <div className="tracker-card">
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px', color: isCancelled ? 'var(--red)' : 'var(--green)' }}>
+        <header className="tracker-header">
+          <div className={`tracker-status-icon ${isCancelled ? 'cancelled' : ''}`}>
             {isCancelled ? <AlertTriangle size={42} /> : <CheckCircle size={42} />}
           </div>
-          <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: isCancelled ? 'var(--red)' : 'var(--text)' }}>
-            {isCancelled ? 'Order Cancelled' : 'Order Confirmed!'}
-          </h2>
-          <p style={{ color: 'var(--text2)', fontSize: '0.9rem', marginTop: '4px' }}>
-            Order #{order?.orderNumber || 'RFC-000000'}
+          <h2>{isCancelled ? 'Order Cancelled' : 'Order Confirmed'}</h2>
+          <p>Order #{trackedOrder?.orderNumber || 'RFC-000000'}</p>
+          <p className="tracker-time">
+            <Clock size={14} />
+            {trackedOrder?.orderTime || (trackedOrder?.createdAt ? new Date(trackedOrder.createdAt).toLocaleString('en-GB') : 'Just now')}
           </p>
-
-          <p style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: '2px', fontWeight: 600 }}>
-            🕒 Placed at: {order?.orderTime || (order?.createdAt ? new Date(order.createdAt).toLocaleString('en-GB') : 'Just now')}
-          </p>
-
           {!isCancelled && (
-            <>
-              <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.8rem', fontWeight: 900, color: 'var(--red)', marginTop: '12px' }}>
-                {mins}:{secs.toString().padStart(2, '0')}
-              </div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>Estimated delivery time</p>
-            </>
+            <div className="eta-block">
+              <strong>{mins}:{secs.toString().padStart(2, '0')}</strong>
+              <span>{trackedOrder?.orderType === 'collection' ? 'Estimated collection time' : 'Estimated delivery time'}</span>
+            </div>
           )}
-        </div>
+          <span className={`realtime-pill ${isConnected ? 'connected' : ''}`}>
+            {isConnected ? 'Live updates on' : 'Live updates pending'}
+          </span>
+        </header>
 
         {!isCancelled && (
           <div className="status-timeline">
-            {STEPS.map((s, i) => {
-              const StepIcon = s.icon;
-              const isDone = i + 1 < currentStep;
-              const isActive = i + 1 === currentStep;
+            {STEPS.map((step, index) => {
+              const StepIcon = step.icon;
+              const isDone = index + 1 < currentStep;
+              const isActive = index + 1 === currentStep;
               return (
-                <div key={i} className={`status-step ${isDone ? 'completed' : ''} ${isActive ? 'active' : ''}`}>
+                <div key={step.status} className={`status-step ${isDone ? 'completed' : ''} ${isActive ? 'active' : ''}`}>
                   <div className="step-circle">
                     {isDone ? <CheckCircle size={20} /> : <StepIcon size={18} />}
                   </div>
-                  <span className="step-label">{s.label}</span>
+                  <span className="step-label">{step.label}</span>
                 </div>
               );
             })}
           </div>
         )}
 
-        <div style={{
-          textAlign: 'center', padding: '16px', borderRadius: 'var(--radius-sm)',
-          margin: '20px 0', background: isCancelled ? '#FEF2F2' : 'var(--bg)',
-          color: isCancelled ? 'var(--red)' : 'var(--text)', border: isCancelled ? '1px solid #FEE2E2' : 'none'
-        }}>
-          {isCancelled ? (
-            <p style={{ fontWeight: 800 }}>Reason: {order.cancellationReason || 'Order was cancelled by customer.'}</p>
-          ) : (
-            <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{STEPS[currentStep - 1].msg}</p>
-          )}
+        <div className={`tracker-message ${isCancelled ? 'cancelled' : ''}`}>
+          <p>{statusMessage}</p>
         </div>
 
-        {order && (
+        {showDeliveryMap && (
+          <DeliveryMap
+            destination={deliveryDestination}
+            etaMinutes={trackedOrder.etaMinutes}
+          />
+        )}
+
+        {trackedOrder && (
           <div className="receipt-section">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-              <h4 style={{ margin: 0 }}>Order Summary</h4>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {!isCancelled && (currentStep < 3 || mins < 45) && (
-                  <button
-                    onClick={() => setIsCancelOpen(true)}
-                    style={{
-                      padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                      background: '#FEF2F2', color: 'var(--red)', border: '1px solid #FEE2E2',
-                      fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer'
-                    }}
-                  >
+            <div className="receipt-header-row">
+              <h4>Order Summary</h4>
+              <div className="receipt-actions">
+                {canCancel && (
+                  <button className="btn-soft-danger" onClick={() => setIsCancelOpen(true)}>
                     Cancel Order
                   </button>
                 )}
-
-                <button
-                  onClick={() => setIsPrintOpen(true)}
-                  className="btn-add-item"
-                  style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                >
+                <button onClick={() => setIsPrintOpen(true)} className="btn-add-item compact">
                   <Printer size={14} /> Print Receipt
                 </button>
               </div>
             </div>
 
-            {order.items && order.items.map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', padding: '6px 0', color: 'var(--text2)' }}>
+            {trackedOrder.items?.map((item, index) => (
+              <div key={`${item.id}-${index}`} className="receipt-row">
                 <span>{item.quantity}x {getOrderItemName(item)}</span>
-                <span>£{(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
+                <span>GBP {(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
               </div>
             ))}
 
-            <div style={{ borderTop: '1px solid var(--border)', marginTop: '10px', paddingTop: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '1.05rem' }}>
-                <span>Total Amount</span>
-                <span style={{ color: 'var(--red)' }}>£{order.total?.toFixed(2) || '0.00'}</span>
-              </div>
+            <div className="receipt-total-row">
+              <span>Total Amount</span>
+              <span>GBP {trackedOrder.total?.toFixed(2) || '0.00'}</span>
             </div>
           </div>
         )}
 
-        <button onClick={onNewOrder} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          width: '100%', padding: '14px', borderRadius: 'var(--radius-full)',
-          background: 'var(--red)', color: '#fff', fontWeight: 800, fontSize: '0.95rem',
-          marginTop: '24px', cursor: 'pointer', border: 'none', boxShadow: 'var(--shadow-red)'
-        }}>
+        <button onClick={onNewOrder} className="tracker-back-btn">
           <ArrowLeft size={16} /> Back to Menu
         </button>
       </div>
@@ -147,17 +166,101 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder }) {
       <PrintReceiptModal
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
-        order={order}
+        order={trackedOrder}
       />
 
       <CancelOrderModal
         isOpen={isCancelOpen}
         onClose={() => setIsCancelOpen(false)}
-        order={order}
+        order={trackedOrder}
         onConfirmCancel={(orderId, reason) => {
-          if (onCancelOrder) onCancelOrder(orderId, reason);
+          onCancelOrder?.(orderId, reason);
+          setIsCancelOpen(false);
         }}
       />
     </div>
   );
 }
+
+function DeliveryMap({ destination, etaMinutes }) {
+  const mapRef = useRef(null);
+  const [mapError, setMapError] = useState('');
+
+  useEffect(() => {
+    if (!googleMapsKey) {
+      setMapError('Google Maps key is not configured.');
+      return undefined;
+    }
+
+    let isActive = true;
+    let directionsRenderer;
+
+    const renderMap = () => {
+      if (!isActive || !mapRef.current || !window.google?.maps) return;
+
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: STORE_LOCATION,
+        zoom: 13,
+        disableDefaultUI: true
+      });
+      const directionsService = new window.google.maps.DirectionsService();
+      directionsRenderer = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: false });
+
+      directionsService.route({
+        origin: STORE_LOCATION,
+        destination,
+        travelMode: window.google.maps.TravelMode.DRIVING
+      }, (result, status) => {
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+        } else {
+          setMapError('Route is temporarily unavailable.');
+        }
+      });
+    };
+
+    if (window.google?.maps) {
+      renderMap();
+    } else {
+      const scriptId = 'google-maps-js';
+      let script = document.getElementById(scriptId);
+      if (!script) {
+        script = document.createElement('script');
+        script.id = scriptId;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(googleMapsKey)}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+      script.addEventListener('load', renderMap, { once: true });
+    }
+
+    return () => {
+      isActive = false;
+      directionsRenderer?.setMap(null);
+    };
+  }, [destination]);
+
+  return (
+    <div className="delivery-map-panel">
+      <div ref={mapRef} className="delivery-map" />
+      <p>{etaMinutes ? `Estimated arrival in ~${etaMinutes} minutes` : 'Estimated arrival is being calculated.'}</p>
+      {mapError && <span>{mapError}</span>}
+    </div>
+  );
+}
+
+OrderTracker.propTypes = {
+  order: PropTypes.object,
+  onNewOrder: PropTypes.func.isRequired,
+  onCancelOrder: PropTypes.func,
+  showToast: PropTypes.func
+};
+
+DeliveryMap.propTypes = {
+  destination: PropTypes.shape({
+    lat: PropTypes.number.isRequired,
+    lng: PropTypes.number.isRequired
+  }).isRequired,
+  etaMinutes: PropTypes.number
+};

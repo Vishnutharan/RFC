@@ -11,6 +11,10 @@ public class RfcDbContext : DbContext
     public DbSet<DbOrder> Orders => Set<DbOrder>();
     public DbSet<DbReview> Reviews => Set<DbReview>();
     public DbSet<DbCustomer> Customers => Set<DbCustomer>();
+    public DbSet<StaffUser> StaffUsers => Set<StaffUser>();
+    public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<StoreSetting> StoreSettings => Set<StoreSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,43 +24,51 @@ public class RfcDbContext : DbContext
         {
             entity.ToTable("menu_items");
             entity.HasKey(item => item.Id);
-            entity.Property(item => item.Id).HasColumnName("id");
-            entity.Property(item => item.CategoryId).HasColumnName("category_id");
-            entity.Property(item => item.Name).HasColumnName("name");
-            entity.Property(item => item.Description).HasColumnName("description");
-            entity.Property(item => item.Price).HasColumnName("price");
-            entity.Property(item => item.CalorieInfo).HasColumnName("calorie_info");
+            entity.Property(item => item.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(item => item.CategoryId).HasColumnName("category_id").HasMaxLength(80).IsRequired();
+            entity.Property(item => item.Name).HasColumnName("name").HasMaxLength(180).IsRequired();
+            entity.Property(item => item.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(item => item.Price).HasColumnName("price").HasPrecision(10, 2);
+            entity.Property(item => item.CalorieInfo).HasColumnName("calorie_info").HasMaxLength(80);
             entity.Property(item => item.IsSpicy).HasColumnName("is_spicy");
             entity.Property(item => item.IsBestseller).HasColumnName("is_bestseller");
-            entity.Property(item => item.ImageUrl).HasColumnName("image_url");
+            entity.Property(item => item.ImageUrl).HasColumnName("image_url").HasMaxLength(1000);
             entity.Property(item => item.HasOptions).HasColumnName("has_options");
             entity.Property(item => item.IsAvailable).HasColumnName("is_available");
+            entity.Property(item => item.StockCount).HasColumnName("stock_count").HasDefaultValue(999);
         });
 
         modelBuilder.Entity<DbOrder>(entity =>
         {
             entity.ToTable("orders");
             entity.HasKey(order => order.Id);
-            entity.Property(order => order.Id).HasColumnName("id");
-            entity.Property(order => order.OrderNumber).HasColumnName("order_number");
-            entity.Property(order => order.OrderType).HasColumnName("order_type");
-            entity.Property(order => order.CustomerName).HasColumnName("customer_name");
-            entity.Property(order => order.CustomerPhone).HasColumnName("customer_phone");
-            entity.Property(order => order.CustomerEmail).HasColumnName("customer_email");
-            entity.Property(order => order.DeliveryAddress).HasColumnName("delivery_address");
-            entity.Property(order => order.DeliveryPostcode).HasColumnName("delivery_postcode");
-            entity.Property(order => order.DeliveryNotes).HasColumnName("delivery_notes");
+            entity.Property(order => order.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(order => order.OrderNumber).HasColumnName("order_number").HasMaxLength(20).IsRequired();
+            entity.HasIndex(order => order.OrderNumber).IsUnique();
+            entity.Property(order => order.OrderType).HasColumnName("order_type").HasMaxLength(20).IsRequired();
+            entity.Property(order => order.CustomerName).HasColumnName("customer_name").HasMaxLength(100).IsRequired();
+            entity.Property(order => order.CustomerPhone).HasColumnName("customer_phone").HasMaxLength(50).IsRequired();
+            entity.Property(order => order.CustomerEmail).HasColumnName("customer_email").HasMaxLength(120).IsRequired();
+            entity.Property(order => order.DeliveryAddress).HasColumnName("delivery_address").HasMaxLength(500);
+            entity.Property(order => order.DeliveryPostcode).HasColumnName("delivery_postcode").HasMaxLength(20);
+            entity.Property(order => order.DeliveryNotes).HasColumnName("delivery_notes").HasMaxLength(500);
             entity.Property(order => order.ItemsJson).HasColumnName("items_json").HasColumnType("jsonb");
-            entity.Property(order => order.Subtotal).HasColumnName("subtotal");
-            entity.Property(order => order.DiscountAmount).HasColumnName("discount_amount");
-            entity.Property(order => order.DeliveryFee).HasColumnName("delivery_fee");
-            entity.Property(order => order.Total).HasColumnName("total");
-            entity.Property(order => order.VoucherCode).HasColumnName("voucher_code");
-            entity.Property(order => order.PaymentMethod).HasColumnName("payment_method");
-            entity.Property(order => order.PaymentStatus).HasColumnName("payment_status");
-            entity.Property(order => order.OrderStatus).HasColumnName("order_status");
-            entity.Property(order => order.OrderTime).HasColumnName("order_time");
-            entity.Property(order => order.CancellationReason).HasColumnName("cancellation_reason");
+            entity.Property(order => order.Subtotal).HasColumnName("subtotal").HasPrecision(10, 2);
+            entity.Property(order => order.DiscountAmount).HasColumnName("discount_amount").HasPrecision(10, 2);
+            entity.Property(order => order.DeliveryFee).HasColumnName("delivery_fee").HasPrecision(10, 2);
+            entity.Property(order => order.Total).HasColumnName("total").HasPrecision(10, 2);
+            entity.Property(order => order.VoucherCode).HasColumnName("voucher_code").HasMaxLength(50);
+            entity.Property(order => order.PaymentMethod).HasColumnName("payment_method").HasMaxLength(50);
+            entity.Property(order => order.PaymentStatus).HasColumnName("payment_status").HasMaxLength(50);
+            entity.Property(order => order.OrderStatus).HasColumnName("order_status").HasMaxLength(50);
+            entity.Property(order => order.OrderTime).HasColumnName("order_time").HasMaxLength(100);
+            entity.Property(order => order.CancellationReason).HasColumnName("cancellation_reason").HasMaxLength(500);
+            entity.Property(order => order.StripePaymentIntentId).HasColumnName("stripe_payment_intent_id").HasMaxLength(200);
+            entity.HasIndex(order => order.StripePaymentIntentId);
+            entity.Property(order => order.DeliveryLat).HasColumnName("delivery_lat").HasPrecision(9, 6);
+            entity.Property(order => order.DeliveryLng).HasColumnName("delivery_lng").HasPrecision(9, 6);
+            entity.Property(order => order.EtaMinutes).HasColumnName("eta_minutes");
+            entity.Property(order => order.DriverId).HasColumnName("driver_id").HasMaxLength(80);
             entity.Property(order => order.CreatedAt).HasColumnName("created_at");
         });
 
@@ -64,15 +76,15 @@ public class RfcDbContext : DbContext
         {
             entity.ToTable("reviews");
             entity.HasKey(review => review.Id);
-            entity.Property(review => review.Id).HasColumnName("id");
-            entity.Property(review => review.CustomerName).HasColumnName("customer_name");
+            entity.Property(review => review.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(review => review.CustomerName).HasColumnName("customer_name").HasMaxLength(100);
             entity.Property(review => review.Rating).HasColumnName("rating");
-            entity.Property(review => review.Type).HasColumnName("type");
-            entity.Property(review => review.Category).HasColumnName("category");
-            entity.Property(review => review.Comment).HasColumnName("comment");
-            entity.Property(review => review.OrderNumber).HasColumnName("order_number");
-            entity.Property(review => review.Status).HasColumnName("status");
-            entity.Property(review => review.Response).HasColumnName("response");
+            entity.Property(review => review.Type).HasColumnName("type").HasMaxLength(30);
+            entity.Property(review => review.Category).HasColumnName("category").HasMaxLength(80);
+            entity.Property(review => review.Comment).HasColumnName("comment").HasMaxLength(2000);
+            entity.Property(review => review.OrderNumber).HasColumnName("order_number").HasMaxLength(30);
+            entity.Property(review => review.Status).HasColumnName("status").HasMaxLength(30);
+            entity.Property(review => review.Response).HasColumnName("response").HasMaxLength(1000);
             entity.Property(review => review.Date).HasColumnName("date");
         });
 
@@ -80,16 +92,65 @@ public class RfcDbContext : DbContext
         {
             entity.ToTable("customers");
             entity.HasKey(customer => customer.Id);
-            entity.Property(customer => customer.Id).HasColumnName("id");
-            entity.Property(customer => customer.Name).HasColumnName("name");
-            entity.Property(customer => customer.Email).HasColumnName("email");
-            entity.Property(customer => customer.Phone).HasColumnName("phone");
-            entity.Property(customer => customer.Address).HasColumnName("address");
-            entity.Property(customer => customer.Postcode).HasColumnName("postcode");
-            entity.Property(customer => customer.PasswordHash).HasColumnName("password_hash");
+            entity.Property(customer => customer.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(customer => customer.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+            entity.Property(customer => customer.Email).HasColumnName("email").HasMaxLength(120).IsRequired();
+            entity.Property(customer => customer.Phone).HasColumnName("phone").HasMaxLength(30);
+            entity.Property(customer => customer.Address).HasColumnName("address").HasMaxLength(400);
+            entity.Property(customer => customer.Postcode).HasColumnName("postcode").HasMaxLength(20);
+            entity.Property(customer => customer.PasswordHash).HasColumnName("password_hash").HasMaxLength(300).IsRequired();
             entity.Property(customer => customer.CreatedAt).HasColumnName("created_at");
             entity.Property(customer => customer.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(customer => customer.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<StaffUser>(entity =>
+        {
+            entity.ToTable("staff_users");
+            entity.HasKey(staff => staff.Id);
+            entity.Property(staff => staff.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(staff => staff.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+            entity.Property(staff => staff.Email).HasColumnName("email").HasMaxLength(120).IsRequired();
+            entity.Property(staff => staff.PasswordHash).HasColumnName("password_hash").HasMaxLength(300).IsRequired();
+            entity.Property(staff => staff.Role).HasColumnName("role").HasMaxLength(30).IsRequired();
+            entity.Property(staff => staff.IsActive).HasColumnName("is_active");
+            entity.Property(staff => staff.CreatedAt).HasColumnName("created_at");
+            entity.HasIndex(staff => staff.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<LoginAttempt>(entity =>
+        {
+            entity.ToTable("login_attempts");
+            entity.HasKey(attempt => attempt.Id);
+            entity.Property(attempt => attempt.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(attempt => attempt.Email).HasColumnName("email").HasMaxLength(120).IsRequired();
+            entity.Property(attempt => attempt.AttemptCount).HasColumnName("attempt_count");
+            entity.Property(attempt => attempt.LastAttemptAt).HasColumnName("last_attempt_at");
+            entity.Property(attempt => attempt.LockedUntil).HasColumnName("locked_until");
+            entity.HasIndex(attempt => attempt.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.ToTable("audit_logs");
+            entity.HasKey(log => log.Id);
+            entity.Property(log => log.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(log => log.UserId).HasColumnName("user_id").HasMaxLength(80);
+            entity.Property(log => log.Action).HasColumnName("action").HasMaxLength(120).IsRequired();
+            entity.Property(log => log.EntityType).HasColumnName("entity_type").HasMaxLength(80).IsRequired();
+            entity.Property(log => log.EntityId).HasColumnName("entity_id").HasMaxLength(120);
+            entity.Property(log => log.OldValue).HasColumnName("old_value").HasColumnType("jsonb");
+            entity.Property(log => log.NewValue).HasColumnName("new_value").HasColumnType("jsonb");
+            entity.Property(log => log.Timestamp).HasColumnName("timestamp");
+            entity.Property(log => log.IpAddress).HasColumnName("ip_address").HasMaxLength(80);
+        });
+
+        modelBuilder.Entity<StoreSetting>(entity =>
+        {
+            entity.ToTable("store_settings");
+            entity.HasKey(setting => setting.Key);
+            entity.Property(setting => setting.Key).HasColumnName("key").HasMaxLength(120);
+            entity.Property(setting => setting.Value).HasColumnName("value").HasColumnType("jsonb");
         });
     }
 }
@@ -116,6 +177,11 @@ public class DbOrder
     public string OrderStatus { get; set; } = "Placed";
     public string OrderTime { get; set; } = string.Empty;
     public string? CancellationReason { get; set; }
+    public string? StripePaymentIntentId { get; set; }
+    public decimal? DeliveryLat { get; set; }
+    public decimal? DeliveryLng { get; set; }
+    public int? EtaMinutes { get; set; }
+    public string? DriverId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -131,4 +197,43 @@ public class DbReview
     public string Status { get; set; } = "Published";
     public string? Response { get; set; }
     public DateTime Date { get; set; } = DateTime.UtcNow;
+}
+
+public class StaffUser
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public string Role { get; set; } = "staff";
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class LoginAttempt
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Email { get; set; } = string.Empty;
+    public int AttemptCount { get; set; }
+    public DateTime LastAttemptAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LockedUntil { get; set; }
+}
+
+public class AuditLog
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string? UserId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string EntityType { get; set; } = string.Empty;
+    public string? EntityId { get; set; }
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public string? IpAddress { get; set; }
+}
+
+public class StoreSetting
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = "{}";
 }

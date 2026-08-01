@@ -23,6 +23,7 @@ create table if not exists public.menu_items (
     image_url text,
     has_options boolean not null default false,
     is_available boolean not null default true,
+    stock_count integer not null default 999,
     created_at timestamptz not null default now()
 );
 
@@ -33,6 +34,7 @@ alter table public.menu_items add column if not exists is_bestseller boolean not
 alter table public.menu_items add column if not exists image_url text;
 alter table public.menu_items add column if not exists has_options boolean not null default false;
 alter table public.menu_items add column if not exists is_available boolean not null default true;
+alter table public.menu_items add column if not exists stock_count integer not null default 999;
 alter table public.menu_items add column if not exists created_at timestamptz not null default now();
 
 create table if not exists public.vouchers (
@@ -65,8 +67,19 @@ create table if not exists public.orders (
     order_status varchar(50) not null default 'Placed',
     order_time varchar(100),
     cancellation_reason text,
+    stripe_payment_intent_id varchar(200),
+    delivery_lat numeric(9, 6),
+    delivery_lng numeric(9, 6),
+    eta_minutes integer,
+    driver_id varchar(80),
     created_at timestamptz not null default now()
 );
+
+alter table public.orders add column if not exists stripe_payment_intent_id varchar(200);
+alter table public.orders add column if not exists delivery_lat numeric(9, 6);
+alter table public.orders add column if not exists delivery_lng numeric(9, 6);
+alter table public.orders add column if not exists eta_minutes integer;
+alter table public.orders add column if not exists driver_id varchar(80);
 
 create table if not exists public.reviews (
     id varchar(50) primary key,
@@ -93,9 +106,47 @@ create table if not exists public.customers (
     updated_at timestamptz
 );
 
+create table if not exists public.staff_users (
+    id varchar(80) primary key,
+    name varchar(100) not null,
+    email varchar(120) not null,
+    password_hash varchar(300) not null,
+    role varchar(30) not null default 'staff',
+    is_active boolean not null default true,
+    created_at timestamptz not null default now()
+);
+
+create table if not exists public.login_attempts (
+    id varchar(80) primary key,
+    email varchar(120) not null,
+    attempt_count integer not null default 0,
+    last_attempt_at timestamptz not null default now(),
+    locked_until timestamptz
+);
+
+create table if not exists public.audit_logs (
+    id varchar(80) primary key,
+    user_id varchar(80),
+    action varchar(120) not null,
+    entity_type varchar(80) not null,
+    entity_id varchar(120),
+    old_value jsonb,
+    new_value jsonb,
+    timestamp timestamptz not null default now(),
+    ip_address varchar(80)
+);
+
+create table if not exists public.store_settings (
+    key varchar(120) primary key,
+    value jsonb not null default '{}'::jsonb
+);
+
 create unique index if not exists ix_customers_email_lower on public.customers (lower(email));
+create unique index if not exists ix_staff_users_email_lower on public.staff_users (lower(email));
+create unique index if not exists ix_login_attempts_email_lower on public.login_attempts (lower(email));
 create index if not exists ix_orders_created_at on public.orders (created_at desc);
 create index if not exists ix_orders_order_status on public.orders (order_status);
+create index if not exists ix_orders_stripe_payment_intent_id on public.orders (stripe_payment_intent_id);
 create index if not exists ix_reviews_date on public.reviews (date desc);
 
 insert into public.menu_categories (id, name, display_order, icon_name) values
@@ -152,6 +203,18 @@ on conflict (code) do update set
     description = excluded.description,
     is_active = excluded.is_active;
 
+insert into public.store_settings (key, value) values
+('OpeningHours', '{
+  "Monday": {"open": "11:00", "close": "23:00"},
+  "Tuesday": {"open": "11:00", "close": "23:00"},
+  "Wednesday": {"open": "11:00", "close": "23:00"},
+  "Thursday": {"open": "11:00", "close": "23:00"},
+  "Friday": {"open": "11:00", "close": "23:30"},
+  "Saturday": {"open": "11:00", "close": "23:30"},
+  "Sunday": {"open": "12:00", "close": "22:30"}
+}'::jsonb)
+on conflict (key) do update set value = excluded.value;
+
 insert into public.reviews (id, customer_name, rating, type, category, comment, order_number, status, response, date) values
 ('rev-1', 'Sarah M.', 5, 'Review', 'Food Quality', 'The bucket was crispy and hot. Delivered in 25 minutes.', 'RFC-849201', 'Published', 'Thank you Sarah. Glad you loved it.', now()),
 ('rev-2', 'David K.', 5, 'Review', 'Delivery Speed', 'Always fast delivery to Berry Avenue. Voucher worked perfectly.', null, 'Published', null, now()),
@@ -173,4 +236,8 @@ union all select 'vouchers', count(*) from public.vouchers
 union all select 'orders', count(*) from public.orders
 union all select 'reviews', count(*) from public.reviews
 union all select 'customers', count(*) from public.customers
+union all select 'staff_users', count(*) from public.staff_users
+union all select 'login_attempts', count(*) from public.login_attempts
+union all select 'audit_logs', count(*) from public.audit_logs
+union all select 'store_settings', count(*) from public.store_settings
 order by table_name;

@@ -31,6 +31,9 @@ public class CustomerRegisterRequest : LoginRequest
 
     [MaxLength(20)]
     public string Postcode { get; set; } = string.Empty;
+
+    [Range(typeof(bool), "true", "true", ErrorMessage = "Privacy policy consent is required.")]
+    public bool ConsentAccepted { get; set; }
 }
 
 public class CustomerUpdateRequest

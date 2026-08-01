@@ -30,4 +30,5 @@ public class MenuItem
 
     public bool HasOptions { get; set; }
     public bool IsAvailable { get; set; } = true;
+    public int StockCount { get; set; } = 999;
 }

@@ -6,6 +6,8 @@ namespace RFC.Api.Services;
 
 public sealed class OrderPricingService
 {
+    public const string ServiceUnavailableMessage = "Service temporarily unavailable. Please try again shortly.";
+
     private const decimal DeliveryFeeThreshold = 25.00m;
     private const decimal DeliveryFee = 2.50m;
     private const decimal DeliveryMinimumSpend = 15.00m;
@@ -15,10 +17,8 @@ public sealed class OrderPricingService
         {
             ["Wedges"] = 0.80m,
             ["Wedges (+GBP0.80)"] = 0.80m,
-            ["Wedges (+£0.80)"] = 0.80m,
             ["Pepsi 1.5L Bottle"] = 2.00m,
-            ["Pepsi 1.5L (+GBP2.00)"] = 2.00m,
-            ["Pepsi 1.5L (+£2.00)"] = 2.00m
+            ["Pepsi 1.5L (+GBP2.00)"] = 2.00m
         };
 
     private readonly RfcDbContext? _db;
@@ -40,11 +40,17 @@ public sealed class OrderPricingService
         }
 
         var menuItems = await GetMenuItemsAsync();
+        if (menuItems == null)
+        {
+            return OrderPricingResult.Fail(ServiceUnavailableMessage);
+        }
+
         var menuById = menuItems
             .Where(item => item.IsAvailable)
             .ToDictionary(item => item.Id, item => item, StringComparer.OrdinalIgnoreCase);
 
         var normalizedItems = new List<OrderItem>();
+        var requestedStock = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var requestedItem in order.Items)
         {
             if (requestedItem.Quantity is < 1 or > 20)
@@ -58,17 +64,23 @@ public sealed class OrderPricingService
                 return OrderPricingResult.Fail("One or more menu items are unavailable. Please refresh the menu.");
             }
 
+            requestedStock[menuItem.Id] = requestedStock.GetValueOrDefault(menuItem.Id) + requestedItem.Quantity;
+            if (requestedStock[menuItem.Id] > menuItem.StockCount)
+            {
+                return OrderPricingResult.Fail($"{menuItem.Name} is currently out of stock.");
+            }
+
             var unitPrice = RoundMoney(menuItem.Price + CalculateOptionTotal(requestedItem));
             normalizedItems.Add(new OrderItem
             {
-                Id = requestedItem.Id,
+                Id = menuItem.Id,
                 Name = menuItem.Name,
                 Item = menuItem,
                 Quantity = requestedItem.Quantity,
-                SelectedSide = requestedItem.SelectedSide,
-                SelectedDrink = requestedItem.SelectedDrink,
-                Notes = requestedItem.Notes,
-                Options = requestedItem.Options,
+                SelectedSide = CleanOption(requestedItem.SelectedSide),
+                SelectedDrink = CleanOption(requestedItem.SelectedDrink),
+                Notes = CleanOption(requestedItem.Notes),
+                Options = requestedItem.Options.Select(CleanOption).OfType<string>().Where(option => !string.IsNullOrWhiteSpace(option)).ToList(),
                 Price = unitPrice,
                 UnitPrice = unitPrice
             });
@@ -124,19 +136,19 @@ public sealed class OrderPricingService
         return OrderPricingResult.Success(order);
     }
 
-    private async Task<List<MenuItem>> GetMenuItemsAsync()
+    private async Task<List<MenuItem>?> GetMenuItemsAsync()
     {
-        if (_db == null) return SeedData.DefaultMenuItems;
+        if (_db == null) return null;
 
         try
         {
             var dbItems = await _db.MenuItems.AsNoTracking().ToListAsync();
-            return dbItems.Count > 0 ? dbItems : SeedData.DefaultMenuItems;
+            return dbItems.Count > 0 ? dbItems : null;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Menu lookup failed while pricing an order. Falling back to default menu.");
-            return SeedData.DefaultMenuItems;
+            _logger.LogWarning(ex, "Menu lookup failed while pricing an order.");
+            return null;
         }
     }
 
@@ -168,9 +180,15 @@ public sealed class OrderPricingService
 
     private static string NormalizeOptionLabel(string value)
     {
-        return value.Replace("Â£", "GBP", StringComparison.OrdinalIgnoreCase)
+        return value.Replace("GBP", "GBP", StringComparison.OrdinalIgnoreCase)
                     .Replace("£", "GBP", StringComparison.OrdinalIgnoreCase)
                     .Trim();
+    }
+
+    private static string? CleanOption(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return RFC.Api.Security.InputSanitizer.Clean(value, 500);
     }
 
     private static VoucherValidation ValidateVoucher(string? code, decimal subtotal)

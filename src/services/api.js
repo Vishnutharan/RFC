@@ -1,6 +1,17 @@
-import { MENU_ITEMS, INITIAL_VOUCHERS } from '../data/initialMenu';
+import { INITIAL_VOUCHERS } from '../data/initialMenu';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+const CSRF_COOKIE = 'rfc_csrf';
+const CSRF_HEADER = 'X-CSRF-Token';
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+const readCookie = (name) => {
+  const match = document.cookie
+    .split('; ')
+    .find((part) => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : '';
+};
 
 const readErrorMessage = async (res) => {
   try {
@@ -11,14 +22,42 @@ const readErrorMessage = async (res) => {
   }
 };
 
-const requestJson = async (path, options = {}) => {
+const ensureCsrfToken = async () => {
+  let token = readCookie(CSRF_COOKIE);
+  if (token) return token;
+
+  await fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'GET',
+    credentials: 'include'
+  });
+
+  token = readCookie(CSRF_COOKIE);
+  return token;
+};
+
+export const getHubUrl = () => {
+  if (API_BASE_URL.endsWith('/api')) return API_BASE_URL.slice(0, -4) + '/hubs/order';
+  if (API_BASE_URL === '/api') return '/hubs/order';
+  return `${API_BASE_URL.replace(/\/$/, '')}/hubs/order`;
+};
+
+export const requestJson = async (path, options = {}) => {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers || {})
+  };
+
+  if (UNSAFE_METHODS.has(method)) {
+    const csrfToken = await ensureCsrfToken();
+    if (csrfToken) headers[CSRF_HEADER] = csrfToken;
+  }
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
-    ...options
+    ...options,
+    method,
+    headers
   });
 
   if (!res.ok) {
@@ -29,19 +68,11 @@ const requestJson = async (path, options = {}) => {
   return res.json();
 };
 
-export const getMenuItems = async () => {
-  try {
-    const data = await requestJson('/menu', { method: 'GET', headers: {} });
-    if (Array.isArray(data) && data.length > 0) return data;
-  } catch (e) {
-    console.warn('.NET API menu unavailable, using local menu dataset');
-  }
-  return MENU_ITEMS;
-};
+export const getMenuItems = async () => requestJson('/menu');
 
 export const validateVoucher = (code, subtotal = 0) => {
   const cleanCode = (code || '').trim().toUpperCase();
-  const voucher = INITIAL_VOUCHERS.find(v => v.code === cleanCode);
+  const voucher = INITIAL_VOUCHERS.find((v) => v.code === cleanCode);
 
   if (!voucher) {
     return { valid: false, message: 'Invalid voucher code. Try FIRST10 or OVER25' };
@@ -59,7 +90,7 @@ export const validateVoucher = (code, subtotal = 0) => {
     code: cleanCode,
     discountPercent: voucher.discountPercent,
     discountAmount: subtotal > 0 ? (subtotal * voucher.discountPercent) / 100 : 0,
-    message: `${voucher.discountPercent}% discount applied!`
+    message: `${voucher.discountPercent}% discount applied`
   };
 };
 
@@ -70,6 +101,10 @@ export const placeOrder = async (orderPayload) => {
   });
 };
 
+export const getOrder = async (orderIdOrNumber) => {
+  return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}`);
+};
+
 export const cancelOrder = async (orderIdOrNumber, reason) => {
   return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}/cancel`, {
     method: 'PUT',
@@ -78,13 +113,20 @@ export const cancelOrder = async (orderIdOrNumber, reason) => {
 };
 
 export const getAdminOrders = async () => {
-  return requestJson('/admin/orders', { method: 'GET', headers: {} });
+  return requestJson('/admin/orders');
 };
 
 export const updateOrderStatus = async (orderId, newStatus) => {
   return requestJson(`/admin/orders/${encodeURIComponent(orderId)}/status`, {
     method: 'PUT',
     body: JSON.stringify({ status: newStatus })
+  });
+};
+
+export const createPaymentIntent = async ({ amount, customerEmail }) => {
+  return requestJson('/payments/create-intent', {
+    method: 'POST',
+    body: JSON.stringify({ amount, customerEmail })
   });
 };
 
@@ -100,5 +142,9 @@ export const logoutSession = async () => {
 };
 
 export const getCurrentSession = async () => {
-  return requestJson('/auth/me', { method: 'GET', headers: {} });
+  return requestJson('/auth/me');
+};
+
+export const deleteCurrentCustomer = async () => {
+  return requestJson('/auth/customers/me', { method: 'DELETE' });
 };

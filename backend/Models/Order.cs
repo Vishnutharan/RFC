@@ -89,7 +89,7 @@ public class Order
     public string? VoucherCode { get; set; }
 
     [Required]
-    [RegularExpression("card|apple_pay|cash")]
+    [RegularExpression("card|cash")]
     public string PaymentMethod { get; set; } = "card";
 
     [MaxLength(30)]
@@ -103,6 +103,16 @@ public class Order
 
     [MaxLength(500)]
     public string? CancellationReason { get; set; }
+
+    [MaxLength(200)]
+    public string? StripePaymentIntentId { get; set; }
+
+    public decimal? DeliveryLat { get; set; }
+    public decimal? DeliveryLng { get; set; }
+    public int? EtaMinutes { get; set; }
+
+    [MaxLength(80)]
+    public string? DriverId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
