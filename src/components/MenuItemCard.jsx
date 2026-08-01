@@ -1,93 +1,51 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { Plus, SlidersHorizontal } from 'lucide-react';
+import React from 'react';
+import { Plus, SlidersHorizontal, Star } from 'lucide-react';
 
 const MenuItemCard = ({ item, onSelectItem, index }) => {
-  const cardRef = useRef(null);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
-  const [shinePos, setShinePos] = useState({ x: 50, y: 50 });
-  const [isHovering, setIsHovering] = useState(false);
-
-  const handleMouseMove = useCallback((e) => {
-    const card = cardRef.current;
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setTilt({ x: (y - 0.5) * -8, y: (x - 0.5) * 8 });
-    setShinePos({ x: x * 100, y: y * 100 });
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setTilt({ x: 0, y: 0 });
-    setIsHovering(false);
-  }, []);
-
   const handleClick = () => {
     if (onSelectItem) onSelectItem(item);
   };
 
   return (
-    <div
-      ref={cardRef}
-      className="food-card"
-      style={{
-        transform: isHovering ? `perspective(600px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateY(-6px)` : 'perspective(600px) rotateX(0) rotateY(0)',
-        animationDelay: `${Math.min(index, 5) * 0.05}s`,
-      }}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={handleMouseLeave}
-    >
+    <article className="food-card" style={{ animationDelay: `${Math.min(index, 5) * 0.04}s` }}>
       <div className="card-img-wrapper">
         {item.imageUrl ? (
           <img
             src={item.imageUrl}
             alt={item.name}
             loading="lazy"
-            onError={(e) => {
-              e.target.style.display = 'none';
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
             }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#FFF5F5,#FFF8ED)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>
-            🍗
-          </div>
+          <div className="card-img-fallback">RFC</div>
         )}
-        <div
-          className="card-shine"
-          style={{
-            opacity: isHovering ? 1 : 0,
-            background: `radial-gradient(circle at ${shinePos.x}% ${shinePos.y}%, rgba(255,255,255,0.35), transparent 60%)`
-          }}
-        />
-        {item.badges && item.badges.length > 0 && (
+        {(item.isBestseller || item.isSpicy || item.isPopular) && (
           <div className="badge-list">
-            {item.badges.map((b, i) => (
-              <span key={i} className={`card-badge ${b === 'Popular' ? 'badge-bestseller' : 'badge-spicy'}`}>{b}</span>
-            ))}
-          </div>
-        )}
-        {item.isPopular && !item.badges && (
-          <div className="badge-list">
-            <span className="card-badge badge-bestseller">Popular</span>
+            {(item.isBestseller || item.isPopular) && <span className="card-badge badge-bestseller"><Star size={12} /> Popular</span>}
+            {item.isSpicy && <span className="card-badge badge-spicy">Spicy</span>}
           </div>
         )}
       </div>
 
       <div className="card-body">
-        <h3 className="card-title">{item.name}</h3>
+        <div className="card-title-row">
+          <h3 className="card-title">{item.name}</h3>
+          <span className="card-price">£{item.price.toFixed(2)}</span>
+        </div>
         {item.description && <p className="card-desc">{item.description}</p>}
+        <div className="card-meta">
+          <span>{item.calorieInfo || item.calories || 'Freshly prepared'}</span>
+          {item.hasOptions && <span>Customisable</span>}
+        </div>
         <div className="card-footer">
-          <div>
-            <span className="card-price">£{item.price.toFixed(2)}</span>
-            {item.calories && <span className="calorie-tag"> · {item.calories} kcal</span>}
-          </div>
           <button className="btn-add-item" onClick={handleClick}>
             {item.hasOptions ? <><SlidersHorizontal size={14} /> Customise</> : <><Plus size={14} /> Add</>}
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

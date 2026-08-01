@@ -8,12 +8,13 @@ import CartDrawer from './components/CartDrawer';
 import CheckoutModal from './components/CheckoutModal';
 import OrderTracker from './components/OrderTracker';
 import AdminDashboard from './components/AdminDashboard';
+import AdminLoginModal from './components/AdminLoginModal';
 import CustomerDashboard from './components/CustomerDashboard';
 import PrintReceiptModal from './components/PrintReceiptModal';
 import Toast from './components/Toast';
 
 import { MENU_ITEMS, CATEGORIES } from './data/initialMenu';
-import { getMenuItems, validateVoucher, placeOrder, getAdminOrders, updateOrderStatus } from './services/api';
+import { cancelOrder, getCurrentSession, getMenuItems, validateVoucher, placeOrder } from './services/api';
 import './styles/main.css';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [orderMode, setOrderMode] = useState('delivery');
   const [isAdminView, setIsAdminView] = useState(false);
+  const [adminUser, setAdminUser] = useState(null);
 
   // Data state
   const [menuItems, setMenuItems] = useState(MENU_ITEMS);
@@ -36,6 +38,7 @@ export default function App() {
   const [selectedItemForModal, setSelectedItemForModal] = useState(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isCustomerDashboardOpen, setIsCustomerDashboardOpen] = useState(false);
   const [printReceiptOrder, setPrintReceiptOrder] = useState(null);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -59,10 +62,35 @@ export default function App() {
       setIsLoading(false);
     });
 
-    getAdminOrders().then(orders => {
-      if (orders) setUserOrders(orders);
-    });
+    getCurrentSession()
+      .then(session => {
+        if (session?.role === 'staff' || session?.role === 'manager') {
+          setAdminUser(session);
+        }
+      })
+      .catch(() => {});
+
+    try {
+      const recent = JSON.parse(localStorage.getItem('rfc_recent_orders') || '[]');
+      setUserOrders(Array.isArray(recent) ? recent : []);
+    } catch {
+      setUserOrders([]);
+    }
   }, []);
+
+  const handleStaffPanelClick = useCallback(() => {
+    if (isAdminView) {
+      setIsAdminView(false);
+      return;
+    }
+
+    if (adminUser) {
+      setIsAdminView(true);
+      return;
+    }
+
+    setIsAdminLoginOpen(true);
+  }, [adminUser, isAdminView]);
 
   // Handle item selection
   const handleSelectItem = useCallback((item) => {
@@ -129,8 +157,12 @@ export default function App() {
       setActiveOrder(prev => ({ ...prev, orderStatus: 'Cancelled', cancellationReason }));
     }
 
-    await updateOrderStatus(orderIdOrNumber, 'Cancelled');
-    showToast('Order cancelled successfully.', 'info');
+    try {
+      await cancelOrder(orderIdOrNumber, cancellationReason);
+      showToast('Order cancelled successfully.', 'info');
+    } catch (error) {
+      showToast(error.message || 'Could not cancel order online. Please call the store.', 'error');
+    }
   }, [activeOrder, showToast]);
 
   // Cart quantity update
@@ -210,13 +242,21 @@ export default function App() {
       createdAt: now.toISOString()
     };
 
-    const savedOrder = await placeOrder(payload);
-    setIsCheckoutOpen(false);
-    setCartItems([]);
-    setAppliedVoucher(null);
-    setActiveOrder(savedOrder);
-    setUserOrders(prev => [savedOrder, ...prev]);
-    showToast(`Order #${savedOrder.orderNumber} placed successfully! 🎉`);
+    try {
+      const savedOrder = await placeOrder(payload);
+      setIsCheckoutOpen(false);
+      setCartItems([]);
+      setAppliedVoucher(null);
+      setActiveOrder(savedOrder);
+      setUserOrders(prev => {
+        const next = [savedOrder, ...prev].slice(0, 20);
+        localStorage.setItem('rfc_recent_orders', JSON.stringify(next));
+        return next;
+      });
+      showToast(`Order #${savedOrder.orderNumber} placed successfully!`);
+    } catch (error) {
+      showToast(error.message || 'Order could not be placed. Please try again.', 'error');
+    }
   }, [cartItems, appliedVoucher, orderMode, showToast]);
 
   // Filter menu items
@@ -229,6 +269,7 @@ export default function App() {
   });
 
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartSubtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
     <div className="app-container">
@@ -242,12 +283,13 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         onOpenCustomerDashboard={() => setIsCustomerDashboardOpen(true)}
         isAdminView={isAdminView}
-        setIsAdminView={setIsAdminView}
+        adminUser={adminUser}
+        onStaffPanelClick={handleStaffPanelClick}
       />
 
       {/* View Switcher */}
-      {isAdminView ? (
-        <AdminDashboard showToast={showToast} />
+      {isAdminView && adminUser ? (
+        <AdminDashboard showToast={showToast} adminUser={adminUser} onExit={() => setIsAdminView(false)} />
       ) : activeOrder ? (
         <OrderTracker
           order={activeOrder}
@@ -269,11 +311,11 @@ export default function App() {
           />
 
           {/* Main Menu Grid */}
-          <main className="menu-main-container">
+          <main id="menu" className="menu-main-container">
             <div className="section-header">
-              <h2 className="gradient-text">
+              <h2>
                 {activeCategory === 'all'
-                  ? '🍗 Full RFC Menu'
+                  ? 'Full RFC Menu'
                   : CATEGORIES.find(c => c.id === activeCategory)?.name || 'Menu'}
               </h2>
               <span className="item-count">
@@ -328,6 +370,13 @@ export default function App() {
         </>
       )}
 
+      {!isAdminView && !activeOrder && cartCount > 0 && (
+        <button className="floating-cart-cta" onClick={() => setIsCartOpen(true)}>
+          <span>{cartCount} item{cartCount === 1 ? '' : 's'} in basket</span>
+          <strong>£{cartSubtotal.toFixed(2)}</strong>
+        </button>
+      )}
+
       {/* Item Customization Modal */}
       <ItemModal
         item={selectedItemForModal}
@@ -375,6 +424,17 @@ export default function App() {
         isOpen={!!printReceiptOrder}
         onClose={() => setPrintReceiptOrder(null)}
         order={printReceiptOrder}
+      />
+
+      <AdminLoginModal
+        isOpen={isAdminLoginOpen}
+        onClose={() => setIsAdminLoginOpen(false)}
+        onSuccess={(user) => {
+          setAdminUser(user);
+          setIsAdminLoginOpen(false);
+          setIsAdminView(true);
+          showToast('Staff login successful.');
+        }}
       />
 
       {/* Toast Notifications */}

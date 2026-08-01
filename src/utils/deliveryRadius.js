@@ -75,7 +75,7 @@ export function checkDeliveryEligibility(userPostcode) {
       distanceKm,
       maxRadiusKm,
       fee: 0.00, // FREE DELIVERY within 5 km!
-      reason: `📍 ${distanceKm.toFixed(1)} km from store — Eligible for FREE Delivery! 🎉`
+      reason: `${distanceKm.toFixed(1)} km from store - eligible for free delivery.`
     };
   } else {
     return {
@@ -83,7 +83,7 @@ export function checkDeliveryEligibility(userPostcode) {
       distanceKm,
       maxRadiusKm,
       fee: null,
-      reason: `⚠️ Your address (${distanceKm.toFixed(1)} km away) is outside our 5 km delivery radius. Delivery is unavailable. Please select Store Collection.`
+      reason: `Your address (${distanceKm.toFixed(1)} km away) is outside our 5 km delivery radius. Please select Store Collection.`
     };
   }
 }

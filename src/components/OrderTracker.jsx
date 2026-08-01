@@ -7,8 +7,11 @@ const STEPS = [
   { label: 'Order Placed', icon: CheckCircle, msg: 'Your order has been received!' },
   { label: 'In Kitchen', icon: ChefHat, msg: 'Our chefs are preparing your food...' },
   { label: 'Out for Delivery', icon: Bike, msg: 'Your order is on its way!' },
-  { label: 'Delivered', icon: Home, msg: 'Enjoy your meal! 🎉' },
+  { label: 'Delivered', icon: Home, msg: 'Enjoy your meal.' },
 ];
+
+const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
+const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
 
 export default function OrderTracker({ order, onNewOrder, onCancelOrder }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -33,7 +36,9 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder }) {
     <div className="tracker-container">
       <div className="tracker-card">
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>{isCancelled ? '❌' : '🎉'}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px', color: isCancelled ? 'var(--red)' : 'var(--green)' }}>
+            {isCancelled ? <AlertTriangle size={42} /> : <CheckCircle size={42} />}
+          </div>
           <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: isCancelled ? 'var(--red)' : 'var(--text)' }}>
             {isCancelled ? 'Order Cancelled' : 'Order Confirmed!'}
           </h2>
@@ -79,7 +84,7 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder }) {
           color: isCancelled ? 'var(--red)' : 'var(--text)', border: isCancelled ? '1px solid #FEE2E2' : 'none'
         }}>
           {isCancelled ? (
-            <p style={{ fontWeight: 800 }}>⚠️ Reason: {order.cancellationReason || 'Order was cancelled by customer.'}</p>
+            <p style={{ fontWeight: 800 }}>Reason: {order.cancellationReason || 'Order was cancelled by customer.'}</p>
           ) : (
             <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{STEPS[currentStep - 1].msg}</p>
           )}
@@ -115,8 +120,8 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder }) {
 
             {order.items && order.items.map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', padding: '6px 0', color: 'var(--text2)' }}>
-                <span>{item.quantity}x {item.name}</span>
-                <span>£{(item.price * item.quantity).toFixed(2)}</span>
+                <span>{item.quantity}x {getOrderItemName(item)}</span>
+                <span>£{(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
               </div>
             ))}
 

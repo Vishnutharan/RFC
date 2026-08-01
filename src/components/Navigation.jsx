@@ -1,54 +1,58 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { Beef, Drumstick, Grid2X2, IceCream, Package, Popcorn, ShoppingBag, Smile, UtensilsCrossed } from 'lucide-react';
 import { MENU_ITEMS } from '../data/initialMenu';
 
 const Navigation = ({ activeCategory, setActiveCategory }) => {
   const scrollRef = useRef(null);
 
   const categories = useMemo(() => [
-    { id: 'all', name: 'Full Menu', icon: '🍽️' },
-    { id: 'box-meals', name: 'Box Meals', icon: '📦' },
-    { id: 'burgers-meals', name: 'Burgers & Meals', icon: '🍔' },
-    { id: 'family-buckets', name: 'Family Buckets', icon: '🪣' },
-    { id: 'fried-chicken', name: 'Fried Chicken & Wings', icon: '🍗' },
-    { id: 'wraps', name: 'Wraps & Ribs', icon: '🌯' },
-    { id: 'sides', name: 'Sides & Dips', icon: '🍟' },
-    { id: 'desserts-drinks', name: 'Desserts & Drinks', icon: '🍨' },
-    { id: 'kids', name: 'Kids Meals', icon: '👶' },
+    { id: 'all', name: 'Full Menu', icon: Grid2X2 },
+    { id: 'box-meals', name: 'Box Meals', icon: Package },
+    { id: 'burgers-meals', name: 'Burgers & Meals', icon: Beef },
+    { id: 'family-buckets', name: 'Family Buckets', icon: ShoppingBag },
+    { id: 'fried-chicken', name: 'Chicken & Wings', icon: Drumstick },
+    { id: 'wraps', name: 'Wraps & Ribs', icon: UtensilsCrossed },
+    { id: 'sides', name: 'Sides & Dips', icon: Popcorn },
+    { id: 'desserts-drinks', name: 'Desserts & Drinks', icon: IceCream },
+    { id: 'kids', name: 'Kids Meals', icon: Smile },
   ], []);
 
   const getCount = (catId) => {
     if (!MENU_ITEMS) return 0;
     if (catId === 'all') return MENU_ITEMS.length;
-    return MENU_ITEMS.filter(i => i.categoryId === catId).length;
+    return MENU_ITEMS.filter((item) => item.categoryId === catId).length;
   };
 
   const handleClick = (catId) => {
     setActiveCategory(catId);
     const container = scrollRef.current;
-    if (container) {
-      const tab = container.querySelector(`[data-id="${catId}"]`);
-      if (tab) {
-        const left = tab.offsetLeft - container.offsetWidth / 2 + tab.offsetWidth / 2;
-        container.scrollTo({ left, behavior: 'smooth' });
-      }
-    }
+    if (!container) return;
+
+    const tab = container.querySelector(`[data-id="${catId}"]`);
+    if (!tab) return;
+
+    const left = tab.offsetLeft - container.offsetWidth / 2 + tab.offsetWidth / 2;
+    container.scrollTo({ left, behavior: 'smooth' });
   };
 
   return (
-    <nav className="category-nav-bar">
+    <nav className="category-nav-bar" aria-label="Menu categories">
       <div className="category-nav-container" ref={scrollRef}>
-        {categories.map(cat => (
-          <button
-            key={cat.id}
-            data-id={cat.id}
-            className={`cat-tab ${activeCategory === cat.id ? 'active' : ''}`}
-            onClick={() => handleClick(cat.id)}
-          >
-            <span className="cat-icon">{cat.icon}</span>
-            <span className="cat-name">{cat.name}</span>
-            <span className="cat-badge">{getCount(cat.id)}</span>
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const Icon = cat.icon;
+          return (
+            <button
+              key={cat.id}
+              data-id={cat.id}
+              className={`cat-tab ${activeCategory === cat.id ? 'active' : ''}`}
+              onClick={() => handleClick(cat.id)}
+            >
+              <Icon className="cat-icon" size={16} />
+              <span className="cat-name">{cat.name}</span>
+              <span className="cat-badge">{getCount(cat.id)}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );

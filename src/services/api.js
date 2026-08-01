@@ -1,16 +1,40 @@
 import { MENU_ITEMS, INITIAL_VOUCHERS } from '../data/initialMenu';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+const readErrorMessage = async (res) => {
+  try {
+    const body = await res.json();
+    return body?.message || body?.title || res.statusText;
+  } catch {
+    return res.statusText;
+  }
+};
+
+const requestJson = async (path, options = {}) => {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+
+  if (res.status === 204) return null;
+  return res.json();
+};
 
 export const getMenuItems = async () => {
   try {
-    const res = await fetch(`${API_BASE_URL}/menu`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) return data;
-    }
+    const data = await requestJson('/menu', { method: 'GET', headers: {} });
+    if (Array.isArray(data) && data.length > 0) return data;
   } catch (e) {
-    console.warn('.NET API offline or connecting, using local menu dataset');
+    console.warn('.NET API menu unavailable, using local menu dataset');
   }
   return MENU_ITEMS;
 };
@@ -18,15 +42,15 @@ export const getMenuItems = async () => {
 export const validateVoucher = (code, subtotal = 0) => {
   const cleanCode = (code || '').trim().toUpperCase();
   const voucher = INITIAL_VOUCHERS.find(v => v.code === cleanCode);
-  
+
   if (!voucher) {
     return { valid: false, message: 'Invalid voucher code. Try FIRST10 or OVER25' };
   }
-  
+
   if (voucher.minSpend > 0 && subtotal < voucher.minSpend) {
-    return { 
-      valid: false, 
-      message: `Code ${cleanCode} requires minimum spend of £${voucher.minSpend.toFixed(2)}` 
+    return {
+      valid: false,
+      message: `Code ${cleanCode} requires minimum spend of GBP ${voucher.minSpend.toFixed(2)}`
     };
   }
 
@@ -40,59 +64,41 @@ export const validateVoucher = (code, subtotal = 0) => {
 };
 
 export const placeOrder = async (orderPayload) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/orders`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderPayload)
-    });
-    if (res.ok) return await res.json();
-  } catch (e) {
-    console.warn('.NET API offline, saving order locally');
-  }
+  return requestJson('/orders', {
+    method: 'POST',
+    body: JSON.stringify(orderPayload)
+  });
+};
 
-  const orderNumber = `RFC-${Math.floor(100000 + Math.random() * 900000)}`;
-  const savedOrder = {
-    ...orderPayload,
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    orderNumber,
-    createdAt: new Date().toISOString(),
-    orderStatus: 'Placed',
-    paymentStatus: 'Paid'
-  };
-
-  const existingOrders = JSON.parse(localStorage.getItem('rfc_orders') || '[]');
-  existingOrders.unshift(savedOrder);
-  localStorage.setItem('rfc_orders', JSON.stringify(existingOrders));
-  return savedOrder;
+export const cancelOrder = async (orderIdOrNumber, reason) => {
+  return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}/cancel`, {
+    method: 'PUT',
+    body: JSON.stringify({ reason })
+  });
 };
 
 export const getAdminOrders = async () => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/admin/orders`);
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const local = JSON.parse(localStorage.getItem('rfc_orders') || '[]');
-        return [...data, ...local];
-      }
-    }
-  } catch (e) { /* fallback */ }
-  return JSON.parse(localStorage.getItem('rfc_orders') || '[]');
+  return requestJson('/admin/orders', { method: 'GET', headers: {} });
 };
 
 export const updateOrderStatus = async (orderId, newStatus) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/admin/orders/${orderId}/status`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus })
-    });
-    if (res.ok) return await res.json();
-  } catch (e) { /* fallback */ }
+  return requestJson(`/admin/orders/${encodeURIComponent(orderId)}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status: newStatus })
+  });
+};
 
-  const existingOrders = JSON.parse(localStorage.getItem('rfc_orders') || '[]');
-  const updated = existingOrders.map(o => (o.id === orderId || o.orderNumber === orderId) ? { ...o, orderStatus: newStatus } : o);
-  localStorage.setItem('rfc_orders', JSON.stringify(updated));
-  return { success: true, orderId, orderStatus: newStatus };
+export const adminLogin = async (email, password) => {
+  return requestJson('/auth/admin/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  });
+};
+
+export const logoutSession = async () => {
+  return requestJson('/auth/logout', { method: 'POST', body: '{}' });
+};
+
+export const getCurrentSession = async () => {
+  return requestJson('/auth/me', { method: 'GET', headers: {} });
 };

@@ -1,6 +1,9 @@
 import React from 'react';
 import { X, Printer, CheckCircle } from 'lucide-react';
 
+const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
+const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
+
 export default function PrintReceiptModal({ isOpen, onClose, order }) {
   if (!isOpen || !order) return null;
 
@@ -75,8 +78,8 @@ export default function PrintReceiptModal({ isOpen, onClose, order }) {
             {order.items && order.items.map((item, idx) => (
               <div key={idx} style={{ marginBottom: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{item.quantity}x {item.name}</span>
-                  <span>£{(item.price * item.quantity).toFixed(2)}</span>
+                  <span>{item.quantity}x {getOrderItemName(item)}</span>
+                  <span>£{(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
                 </div>
                 {item.options && item.options.length > 0 && (
                   <div style={{ fontSize: '0.75rem', paddingLeft: '14px', color: '#444' }}>

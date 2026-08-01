@@ -11,7 +11,10 @@ const STATUS_CLASS = {
   Cancelled: 'status-preparing'
 };
 
-export default function AdminDashboard({ showToast }) {
+const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
+const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
+
+export default function AdminDashboard({ showToast, adminUser, onExit }) {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'daily-sales', 'reviews'
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState('All');
@@ -28,20 +31,30 @@ export default function AdminDashboard({ showToast }) {
 
   const loadOrders = async () => {
     setLoading(true);
-    const data = await getAdminOrders();
-    setOrders(data || []);
-    setLoading(false);
+    try {
+      const data = await getAdminOrders();
+      setOrders(data || []);
+    } catch (error) {
+      setOrders([]);
+      if (showToast) showToast(error.message || 'Could not load staff orders.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadOrders(); }, []);
 
   const handleStatusChange = async (orderId, newStatus) => {
-    await updateOrderStatus(orderId, newStatus);
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, orderStatus: newStatus } : o));
-    if (selectedOrderForDetail && selectedOrderForDetail.id === orderId) {
-      setSelectedOrderForDetail(prev => ({ ...prev, orderStatus: newStatus }));
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, orderStatus: newStatus } : o));
+      if (selectedOrderForDetail && selectedOrderForDetail.id === orderId) {
+        setSelectedOrderForDetail(prev => ({ ...prev, orderStatus: newStatus }));
+      }
+      showToast(`Order updated to ${newStatus}`);
+    } catch (error) {
+      showToast(error.message || 'Order status could not be updated.', 'error');
     }
-    showToast(`Order updated to ${newStatus}`);
   };
 
   // CSV Export
@@ -99,7 +112,8 @@ export default function AdminDashboard({ showToast }) {
     dayOrders.forEach(o => {
       if (o.items) {
         o.items.forEach(it => {
-          itemMap[it.name] = (itemMap[it.name] || 0) + (it.quantity || 1);
+          const name = getOrderItemName(it);
+          itemMap[name] = (itemMap[name] || 0) + (it.quantity || 1);
         });
       }
     });
@@ -126,7 +140,7 @@ export default function AdminDashboard({ showToast }) {
       {/* Admin Header */}
       <div className="admin-header">
         <div>
-          <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900 }}>📊 RFC Store Manager Panel</h2>
+          <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900 }}>RFC Store Manager Panel</h2>
           <p style={{ color: 'var(--text2)', fontSize: '0.9rem' }}>Live order tracking, daily sales inspection &amp; customer complaints</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -142,9 +156,9 @@ export default function AdminDashboard({ showToast }) {
       {/* Main Tabs */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
         {[
-          { id: 'orders', label: '📦 Live Orders', count: orders.length },
-          { id: 'daily-sales', label: '📅 Daily Sales Inspector', count: `£${dailySalesData.dayRevenue.toFixed(0)}` },
-          { id: 'reviews', label: '⭐ Reviews & Complaints', count: '' },
+          { id: 'orders', label: 'Live Orders', count: orders.length },
+          { id: 'daily-sales', label: 'Daily Sales Inspector', count: `£${dailySalesData.dayRevenue.toFixed(0)}` },
+          { id: 'reviews', label: 'Reviews & Complaints', count: '' },
         ].map(t => (
           <button
             key={t.id}
@@ -275,7 +289,7 @@ export default function AdminDashboard({ showToast }) {
                       </td>
                       <td>
                         <span className={`status-badge ${o.orderType === 'delivery' ? 'status-placed' : 'status-preparing'}`}>
-                          {o.orderType === 'delivery' ? '🚀 Delivery' : '🏪 Collection'}
+                          {o.orderType === 'delivery' ? 'Delivery' : 'Collection'}
                         </span>
                       </td>
                       <td>
@@ -371,14 +385,14 @@ export default function AdminDashboard({ showToast }) {
             <div className="metric-card">
               <p style={{ fontSize: '0.78rem', color: 'var(--text3)', fontWeight: 600 }}>Delivery vs Collection</p>
               <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '6px' }}>
-                🚀 {dailySalesData.deliveryCount} Delivery · 🏪 {dailySalesData.collectionCount} Collect
+                {dailySalesData.deliveryCount} Delivery · {dailySalesData.collectionCount} Collection
               </p>
             </div>
 
             <div className="metric-card">
               <p style={{ fontSize: '0.78rem', color: 'var(--text3)', fontWeight: 600 }}>Card vs Cash Breakdown</p>
               <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '6px' }}>
-                💳 £{dailySalesData.cardRevenue.toFixed(2)} · 💵 £{dailySalesData.cashRevenue.toFixed(2)}
+                Card £{dailySalesData.cardRevenue.toFixed(2)} · Cash £{dailySalesData.cashRevenue.toFixed(2)}
               </p>
             </div>
           </div>
@@ -386,7 +400,7 @@ export default function AdminDashboard({ showToast }) {
           {/* Top Selling Items for that Day */}
           {dailySalesData.topItems.length > 0 && (
             <div style={{ background: 'var(--white)', padding: '20px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', marginBottom: '20px' }}>
-              <h4 style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: '1rem', marginBottom: '12px' }}>🔥 Top Selling Items on {selectedDate}:</h4>
+              <h4 style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: '1rem', marginBottom: '12px' }}>Top Selling Items on {selectedDate}:</h4>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 {dailySalesData.topItems.map(([name, qty], idx) => (
                   <div key={idx} style={{ background: 'var(--bg)', padding: '8px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem', fontWeight: 700 }}>
@@ -431,7 +445,7 @@ export default function AdminDashboard({ showToast }) {
                       <td><span className="status-badge status-placed">{o.orderType}</span></td>
                       <td>{o.customerName} ({o.customerPhone})</td>
                       <td style={{ fontSize: '0.82rem' }}>
-                        {o.items && o.items.map((it, i) => `${it.quantity}x ${it.name}`).join(', ')}
+                        {o.items && o.items.map((it) => `${it.quantity}x ${getOrderItemName(it)}`).join(', ')}
                       </td>
                       <td style={{ fontFamily: 'var(--font-head)', fontWeight: 900, color: 'var(--red)' }}>£{o.total?.toFixed(2)}</td>
                       <td><span className={`status-badge ${STATUS_CLASS[o.orderStatus] || ''}`}>{o.orderStatus}</span></td>
@@ -472,7 +486,7 @@ export default function AdminDashboard({ showToast }) {
                 <p><strong>Payment Method:</strong> {selectedOrderForDetail.paymentMethod}</p>
                 {selectedOrderForDetail.cancellationReason && (
                   <p style={{ color: 'var(--red)', fontWeight: 800, marginTop: '4px' }}>
-                    ⚠️ Cancellation Reason: {selectedOrderForDetail.cancellationReason}
+                    Cancellation Reason: {selectedOrderForDetail.cancellationReason}
                   </p>
                 )}
               </div>
@@ -482,12 +496,12 @@ export default function AdminDashboard({ showToast }) {
                 {selectedOrderForDetail.items && selectedOrderForDetail.items.map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', borderBottom: '1px solid #F3F4F6', paddingBottom: '6px' }}>
                     <div>
-                      <span style={{ fontWeight: 700 }}>{item.quantity}x {item.name}</span>
+                      <span style={{ fontWeight: 700 }}>{item.quantity}x {getOrderItemName(item)}</span>
                       {item.options && item.options.length > 0 && (
                         <div style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>{item.options.join(', ')}</div>
                       )}
                     </div>
-                    <span style={{ fontWeight: 800 }}>£{(item.price * item.quantity).toFixed(2)}</span>
+                    <span style={{ fontWeight: 800 }}>£{(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
               </div>

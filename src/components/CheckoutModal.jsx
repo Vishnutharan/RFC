@@ -15,19 +15,27 @@ export default function CheckoutModal({ isOpen, onClose, cartItems = [], orderMo
 
   // Auto-prefill customer info from logged in profile on mount / open
   useEffect(() => {
+    let isActive = true;
+
     if (isOpen) {
-      const user = getCurrentUser();
-      if (user) {
-        setFormData(prev => ({
-          ...prev,
-          name: prev.name || user.name || '',
-          email: prev.email || user.email || '',
-          phone: prev.phone || user.phone || '',
-          address: prev.address || user.address || '37 Berry Avenue',
-          postcode: prev.postcode || user.postcode || 'WD24 6RU'
-        }));
-      }
+      getCurrentUser()
+        .then(user => {
+          if (!isActive || !user) return;
+          setFormData(prev => ({
+            ...prev,
+            name: prev.name || user.name || '',
+            email: prev.email || user.email || '',
+            phone: prev.phone || user.phone || '',
+            address: prev.address || user.address || '',
+            postcode: prev.postcode || user.postcode || ''
+          }));
+        })
+        .catch(() => {});
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [isOpen]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -42,7 +50,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems = [], orderMo
 
   // 5 km Delivery Radius Eligibility Check
   const radiusCheck = useMemo(() => {
-    if (orderMode === 'collection') return { isEligible: true, distanceKm: 0, reason: '🏪 Store Collection — 119 Courtlands Drive, Watford' };
+    if (orderMode === 'collection') return { isEligible: true, distanceKm: 0, reason: 'Store Collection - 119 Courtlands Drive, Watford' };
     return checkDeliveryEligibility(formData.postcode);
   }, [formData.postcode, orderMode]);
 
@@ -116,7 +124,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems = [], orderMo
               <Lock size={18} color="var(--red)" /> Checkout &amp; Order Summary
             </h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-              {orderMode === 'delivery' ? '🚀 Delivery Order · Watford 5 km Zone' : '🏪 Store Collection'}
+              {orderMode === 'delivery' ? 'Delivery Order - Watford 5 km Zone' : 'Store Collection'}
             </p>
           </div>
           <button className="close-btn" onClick={onClose}><X size={18} /></button>

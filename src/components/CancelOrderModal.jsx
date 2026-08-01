@@ -5,7 +5,7 @@ const CANCEL_REASONS = [
   '⏱️ Delivery is delayed / taking too long',
   '✍️ Want to modify items in my order',
   '📍 Selected wrong address or order mode',
-  '❌ Ordered by mistake / changed my mind',
+  'Ordered by mistake / changed my mind',
   'Other reason'
 ];
 

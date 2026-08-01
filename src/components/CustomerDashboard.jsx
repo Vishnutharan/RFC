@@ -4,9 +4,12 @@ import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
 import { getCurrentUser, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
 
+const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
+const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
+
 export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, showToast }) {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'profile', 'loyalty', 'vouchers', 'reviews'
-  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [currentUser, setCurrentUser] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
 
   // Profile Edit State
@@ -21,50 +24,103 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
+    let isActive = true;
+
     if (isOpen) {
-      const u = getCurrentUser();
-      setCurrentUser(u);
-      setProfileForm({
-        name: u.name || '',
-        phone: u.phone || '',
-        email: u.email || '',
-        address: u.address || '',
-        postcode: u.postcode || ''
-      });
+      getCurrentUser()
+        .then(u => {
+          if (!isActive) return;
+          setCurrentUser(u);
+          setAuthMode(u ? 'none' : 'login');
+          setProfileForm({
+            name: u?.name || '',
+            phone: u?.phone || '',
+            email: u?.email || '',
+            address: u?.address || '',
+            postcode: u?.postcode || ''
+          });
+        })
+        .catch(() => {
+          if (!isActive) return;
+          setCurrentUser(null);
+          setAuthMode('login');
+        });
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
-    const updated = updateCustomerProfile(profileForm);
-    setCurrentUser(updated);
-    setIsEditingProfile(false);
-    if (showToast) showToast('Profile details updated successfully! ✨');
+    if (!currentUser) {
+      setAuthMode('login');
+      return;
+    }
+
+    try {
+      const updated = await updateCustomerProfile(profileForm);
+      setCurrentUser(updated);
+      setIsEditingProfile(false);
+      if (showToast) showToast('Profile details updated successfully.');
+    } catch (error) {
+      if (showToast) showToast(error.message || 'Profile could not be updated.', 'error');
+    }
   };
 
-  const handleAuthSubmit = (e) => {
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
+    setAuthError('');
+
     if (authMode === 'login') {
-      const res = loginCustomer(authForm.email, authForm.password);
-      if (res.success) {
+      try {
+        const res = await loginCustomer(authForm.email, authForm.password);
         setCurrentUser(res.user);
+        setProfileForm({
+          name: res.user.name || '',
+          phone: res.user.phone || '',
+          email: res.user.email || '',
+          address: res.user.address || '',
+          postcode: res.user.postcode || ''
+        });
         setAuthMode('none');
-        if (showToast) showToast(`Welcome back, ${res.user.name}! 🎉`);
-      } else {
-        setAuthError(res.message);
+        if (showToast) showToast(`Welcome back, ${res.user.name}!`);
+      } catch (error) {
+        setAuthError(error.message || 'Invalid email or password');
       }
     } else if (authMode === 'register') {
       if (!authForm.name || !authForm.email || !authForm.password) {
         setAuthError('Please fill in required fields (Name, Email, Password)');
         return;
       }
-      const user = registerCustomer(authForm);
-      setCurrentUser(user);
-      setAuthMode('none');
-      if (showToast) showToast(`Account created! Welcome ${user.name} 🎉`);
+
+      try {
+        const user = await registerCustomer(authForm);
+        setCurrentUser(user);
+        setProfileForm({
+          name: user.name || '',
+          phone: user.phone || '',
+          email: user.email || '',
+          address: user.address || '',
+          postcode: user.postcode || ''
+        });
+        setAuthMode('none');
+        if (showToast) showToast(`Account created. Welcome ${user.name}`);
+      } catch (error) {
+        setAuthError(error.message || 'Account could not be created');
+      }
     }
+  };
+
+  const handleLogout = async () => {
+    await logoutCustomer();
+    setCurrentUser(null);
+    setAuthMode('login');
+    setIsEditingProfile(false);
+    if (showToast) showToast('Logged out.', 'info');
   };
 
   const loyaltyCount = (orders.length % 8) || 7;
@@ -89,7 +145,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 {currentUser?.name || 'Customer Profile'}
               </h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-                📍 {currentUser?.address || '37 Berry Avenue'}, {currentUser?.postcode || 'WD24 6RU'} · {currentUser?.email}
+                {currentUser ? `${currentUser.address || 'No saved address'}, ${currentUser.postcode || ''} · ${currentUser.email}` : 'Login to save addresses and reorder faster'}
               </p>
             </div>
           </div>
@@ -114,7 +170,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               return (
                 <button
                   key={t.id}
-                  onClick={() => { setActiveTab(t.id); setAuthMode('none'); }}
+                  onClick={() => { setActiveTab(t.id); setAuthMode(currentUser ? 'none' : 'login'); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '6px',
                     padding: '12px 10px', borderBottom: isActive ? '3px solid var(--red)' : '3px solid transparent',
@@ -130,12 +186,21 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
             })}
           </div>
 
-          <button
-            onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}
-            style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--red)', cursor: 'pointer', padding: '6px' }}
-          >
-            {authMode !== 'none' ? '← Back' : 'Switch Account / Login'}
-          </button>
+          {currentUser ? (
+            <button
+              onClick={handleLogout}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--red)', cursor: 'pointer', padding: '6px' }}
+            >
+              <LogOut size={14} /> Logout
+            </button>
+          ) : (
+            <button
+              onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}
+              style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--red)', cursor: 'pointer', padding: '6px' }}
+            >
+              {authMode !== 'none' ? '← Back' : 'Login'}
+            </button>
+          )}
         </div>
 
         {/* AUTH MODAL VIEW (If Login/Register Clicked) */}
@@ -260,13 +325,13 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                           <div style={{ fontSize: '0.85rem', color: 'var(--text2)', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                             {ord.items && ord.items.map((it, idx) => (
                               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                                <span>{it.quantity}x {it.name}</span>
-                                <span style={{ fontWeight: 700 }}>£{(it.price * it.quantity).toFixed(2)}</span>
+                                <span>{it.quantity}x {getOrderItemName(it)}</span>
+                                <span style={{ fontWeight: 700 }}>£{(getOrderItemUnitPrice(it) * it.quantity).toFixed(2)}</span>
                               </div>
                             ))}
                             {ord.cancellationReason && (
                               <p style={{ color: 'var(--red)', fontSize: '0.78rem', marginTop: '6px', fontWeight: 700 }}>
-                                ⚠️ Cancelled: {ord.cancellationReason}
+                                Cancelled: {ord.cancellationReason}
                               </p>
                             )}
                           </div>
@@ -352,7 +417,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   </div>
 
                   <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--red)' }}>
-                    🎉 Just {ordersNeeded} more order{ordersNeeded === 1 ? '' : 's'} until your free reward!
+                    Just {ordersNeeded} more order{ordersNeeded === 1 ? '' : 's'} until your reward.
                   </p>
                 </div>
               </div>

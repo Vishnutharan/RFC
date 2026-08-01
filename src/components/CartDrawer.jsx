@@ -47,7 +47,7 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], onUpdateQt
           ) : (
             <>
               <div className="delivery-banner">
-                {orderMode === 'delivery' ? '🚀 Delivery Mode — 45-55 mins' : '🏪 Collection — Ready in 15-20 mins'}
+                {orderMode === 'delivery' ? 'Delivery - 45-55 mins' : 'Collection - Ready in 15-20 mins'}
               </div>
 
               <div className="min-spend-bar">

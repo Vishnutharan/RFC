@@ -20,33 +20,47 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
   const [activeRespondId, setActiveRespondId] = useState(null);
   const [responseText, setResponseText] = useState('');
 
-  const loadData = () => {
-    const data = getReviewsAndComplaints();
-    setItems(data);
+  const loadData = async () => {
+    try {
+      const data = await getReviewsAndComplaints();
+      setItems(data || []);
+    } catch (error) {
+      setItems([]);
+      if (showToast) showToast(error.message || 'Feedback could not be loaded.', 'error');
+    }
   };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (!form.comment.trim()) return;
-    addReviewOrComplaint(form);
-    setForm({
-      customerName: '', rating: 5, type: 'Review',
-      category: 'Food Quality', comment: '', orderNumber: ''
-    });
-    loadData();
-    if (showToast) showToast(form.type === 'Complaint' ? 'Complaint submitted. Manager will respond shortly!' : 'Thank you for your review! ⭐');
+
+    try {
+      await addReviewOrComplaint(form);
+      setForm({
+        customerName: '', rating: 5, type: 'Review',
+        category: 'Food Quality', comment: '', orderNumber: ''
+      });
+      await loadData();
+      if (showToast) showToast(form.type === 'Complaint' ? 'Complaint submitted. Manager will respond shortly!' : 'Thank you for your review!');
+    } catch (error) {
+      if (showToast) showToast(error.message || 'Feedback could not be submitted.', 'error');
+    }
   };
 
-  const handleAdminRespond = (id, newStatus = 'Resolved') => {
-    updateFeedbackStatus(id, newStatus, responseText);
-    setActiveRespondId(null);
-    setResponseText('');
-    loadData();
-    if (showToast) showToast('Status and response updated!');
+  const handleAdminRespond = async (id, newStatus = 'Resolved') => {
+    try {
+      await updateFeedbackStatus(id, newStatus, responseText);
+      setActiveRespondId(null);
+      setResponseText('');
+      await loadData();
+      if (showToast) showToast('Status and response updated!');
+    } catch (error) {
+      if (showToast) showToast(error.message || 'Feedback status could not be updated.', 'error');
+    }
   };
 
   // Filtered List
@@ -113,8 +127,8 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
                 onChange={(e) => setForm({ ...form, type: e.target.value })}
                 style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem', fontWeight: 700 }}
               >
-                <option value="Review">⭐ Positive Review</option>
-                <option value="Complaint">⚠️ Report Complaint / Issue</option>
+                <option value="Review">Positive Review</option>
+                <option value="Complaint">Report Complaint / Issue</option>
               </select>
             </div>
 
@@ -231,7 +245,7 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
                   background: 'var(--bg)', borderLeft: '3px solid var(--amber)',
                   padding: '10px 12px', marginTop: '10px', borderRadius: '0 8px 8px 0', fontSize: '0.82rem'
                 }}>
-                  <strong style={{ color: 'var(--text)' }}>🏪 Store Manager Response:</strong>
+                  <strong style={{ color: 'var(--text)' }}>Store Manager Response:</strong>
                   <p style={{ color: 'var(--text2)', marginTop: '2px' }}>{item.response}</p>
                 </div>
               )}

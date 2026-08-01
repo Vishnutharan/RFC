@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShoppingBag, Search, Truck, Store, Flame, User } from 'lucide-react';
 
-const Header = ({ cartCount, orderMode, setOrderMode, searchQuery, setSearchQuery, onOpenCart, onOpenCustomerDashboard, isAdminView, setIsAdminView }) => {
+const Header = ({ cartCount, orderMode, setOrderMode, searchQuery, setSearchQuery, onOpenCart, onOpenCustomerDashboard, isAdminView, adminUser, onStaffPanelClick }) => {
   const [scrolled, setScrolled] = useState(false);
   const [bouncing, setBouncing] = useState(false);
   const prevCount = useRef(cartCount);
@@ -26,21 +26,19 @@ const Header = ({ cartCount, orderMode, setOrderMode, searchQuery, setSearchQuer
       <div className="announcement-bar">
         <div className="marquee-container">
           <span className="marquee-text">
-            🍗 FREE DELIVERY on all orders • Use code FIRST10 for 10% off your first order •
-            Fresh Crispy Chicken Daily • Order direct &amp; save! 🔥 •&nbsp;
-            🍗 FREE DELIVERY on all orders • Use code FIRST10 for 10% off your first order •
-            Fresh Crispy Chicken Daily • Order direct &amp; save! 🔥 •&nbsp;
+            Free delivery in our Watford zone - Use FIRST10 for 10% off - Fresh crispy chicken daily - Order direct and save -&nbsp;
+            Free delivery in our Watford zone - Use FIRST10 for 10% off - Fresh crispy chicken daily - Order direct and save -&nbsp;
           </span>
         </div>
-        <button className="staff-panel-btn" onClick={() => setIsAdminView(!isAdminView)}>
-          {isAdminView ? '← Store Front' : 'Staff Admin Panel'}
+        <button className="staff-panel-btn" onClick={onStaffPanelClick}>
+          {isAdminView ? '← Store Front' : adminUser ? 'Staff Dashboard' : 'Staff Login'}
         </button>
       </div>
 
       <div className="header-main">
         <div className="header-content">
           <div className="header-left">
-            <div className="brand-container" onClick={() => setIsAdminView(false)}>
+            <div className="brand-container" onClick={() => isAdminView && onStaffPanelClick()}>
               <div className="logo-badge">
                 <Flame className="logo-icon" size={24} />
               </div>
@@ -79,13 +77,12 @@ const Header = ({ cartCount, orderMode, setOrderMode, searchQuery, setSearchQuer
                 </div>
 
                 <button
-                  className="mode-btn"
+                  className="account-btn"
                   onClick={onOpenCustomerDashboard}
-                  style={{ background: 'var(--bg)', border: '1px solid var(--border)', padding: '8px 14px' }}
                   title="My Account & Loyalty Rewards"
                 >
-                  <User size={18} color="var(--red)" />
-                  <span className="account-btn-label" style={{ fontSize: '0.85rem' }}>Account</span>
+                  <User size={18} />
+                  <span className="account-btn-label">Account</span>
                 </button>
               </>
             )}
