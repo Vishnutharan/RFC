@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,7 @@ public class PaymentsController : ControllerBase
     }
 
     [HttpPost("create-intent")]
+    [Authorize(Policy = "CustomerOnly")]
     [EnableRateLimiting("order-write")]
     public async Task<IActionResult> CreateIntent([FromBody] CreatePaymentIntentRequest request)
     {
