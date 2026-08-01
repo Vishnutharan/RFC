@@ -27,7 +27,9 @@ public class MenuController : ControllerBase
 
         try
         {
-            var items = await _db.MenuItems.AsNoTracking().Where(item => item.IsAvailable).ToListAsync();
+            var items = await _db.MenuItems.AsNoTracking()
+                .Where(item => item.IsAvailable)
+                .ToListAsync(HttpContext.RequestAborted);
             return Ok(items);
         }
         catch (Exception ex)

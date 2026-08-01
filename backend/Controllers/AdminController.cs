@@ -58,7 +58,9 @@ public class AdminController : ControllerBase
 
         try
         {
-            var dbOrders = await _db.Orders.AsNoTracking().OrderByDescending(o => o.CreatedAt).ToListAsync();
+            var dbOrders = await _db.Orders.AsNoTracking()
+                .OrderByDescending(o => o.CreatedAt)
+                .ToListAsync(HttpContext.RequestAborted);
             return Ok(dbOrders.Select(OrdersController.MapToOrderDto).ToList());
         }
         catch (Exception ex)
@@ -83,7 +85,9 @@ public class AdminController : ControllerBase
         try
         {
             var cleanId = InputSanitizer.Clean(id, 80);
-            var dbOrder = await _db.Orders.FirstOrDefaultAsync(o => o.Id == cleanId || o.OrderNumber == cleanId);
+            var dbOrder = await _db.Orders.FirstOrDefaultAsync(
+                o => o.Id == cleanId || o.OrderNumber == cleanId,
+                HttpContext.RequestAborted);
             if (dbOrder == null) return NotFound(new { message = "Order not found" });
 
             var oldStatus = dbOrder.OrderStatus;
@@ -94,7 +98,7 @@ public class AdminController : ControllerBase
                 dbOrder.EtaMinutes ??= await _maps.GetEtaMinutesAsync(dbOrder.DeliveryLat.Value, dbOrder.DeliveryLng.Value, HttpContext.RequestAborted);
             }
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(HttpContext.RequestAborted);
 
             if (_audit != null)
             {
@@ -103,7 +107,7 @@ public class AdminController : ControllerBase
 
             if (status == "Out for Delivery")
             {
-                await _notifications.SendOutForDeliveryAsync(dbOrder);
+                _notifications.SendOutForDeliveryInBackground(dbOrder);
             }
 
             await _hubContext.Clients

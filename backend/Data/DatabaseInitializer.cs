@@ -80,7 +80,7 @@ public static class DatabaseInitializer
 
         if (string.IsNullOrWhiteSpace(email))
         {
-            logger.LogWarning("No seed staff email configured. Set SeedAdmin__Email and SeedAdmin__Password for first-run staff creation.");
+            logger.LogCritical("No staff users exist and no seed staff email is configured. Set SeedAdmin__Email and SeedAdmin__Password before going live.");
             return;
         }
 
@@ -88,7 +88,7 @@ public static class DatabaseInitializer
         {
             if (!PasswordPolicy.IsValid(password))
             {
-                logger.LogWarning("Seed staff password is missing or does not meet complexity rules. Staff user was not created.");
+                logger.LogCritical("No staff users exist and SeedAdmin__Password is missing or does not meet complexity rules. Staff user was not created.");
                 return;
             }
 

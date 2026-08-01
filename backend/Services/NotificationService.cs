@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using RFC.Api.Data;
 using RFC.Api.Models;
 using SendGrid;
@@ -33,11 +34,43 @@ public sealed class NotificationService
             BuildReceiptHtml(order, trackingUrl));
     }
 
+    public void SendOrderPlacedInBackground(Order order)
+    {
+        var snapshot = Clone(order);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendOrderPlacedAsync(snapshot);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Order placed notification failed for {OrderNumber}", snapshot.OrderNumber);
+            }
+        });
+    }
+
     public async Task SendOutForDeliveryAsync(DbOrder order)
     {
         await SendSmsAsync(
             order.CustomerPhone,
             $"Your RFC order #{order.OrderNumber} is on the way! Estimated arrival: {order.EtaMinutes ?? 25} minutes.");
+    }
+
+    public void SendOutForDeliveryInBackground(DbOrder order)
+    {
+        var snapshot = Clone(order);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendOutForDeliveryAsync(snapshot);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Out-for-delivery notification failed for {OrderNumber}", snapshot.OrderNumber);
+            }
+        });
     }
 
     public async Task SendCancellationEmailAsync(DbOrder order, string? reason)
@@ -50,6 +83,22 @@ public sealed class NotificationService
             <p>Your RFC order <strong>#{System.Net.WebUtility.HtmlEncode(order.OrderNumber)}</strong> has been cancelled.</p>
             <p><strong>Reason:</strong> {System.Net.WebUtility.HtmlEncode(reason ?? "No reason provided")}</p>
             """);
+    }
+
+    public void SendCancellationEmailInBackground(DbOrder order, string? reason)
+    {
+        var snapshot = Clone(order);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendCancellationEmailAsync(snapshot, reason);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Cancellation notification failed for {OrderNumber}", snapshot.OrderNumber);
+            }
+        });
     }
 
     private async Task SendSmsAsync(string? to, string body)
@@ -138,5 +187,10 @@ public sealed class NotificationService
         <p><strong>Total:</strong> GBP {order.Total:0.00}</p>
         <p><a href="{System.Net.WebUtility.HtmlEncode(trackingUrl)}">Track your order</a></p>
         """;
+    }
+
+    private static T Clone<T>(T value)
+    {
+        return JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value))!;
     }
 }

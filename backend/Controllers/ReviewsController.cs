@@ -34,7 +34,9 @@ public class ReviewsController : ControllerBase
 
         try
         {
-            var reviews = await _db.Reviews.AsNoTracking().OrderByDescending(r => r.Date).ToListAsync();
+            var reviews = await _db.Reviews.AsNoTracking()
+                .OrderByDescending(r => r.Date)
+                .ToListAsync(HttpContext.RequestAborted);
             return Ok(reviews);
         }
         catch (Exception ex)
@@ -68,7 +70,7 @@ public class ReviewsController : ControllerBase
             };
 
             _db.Reviews.Add(review);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(HttpContext.RequestAborted);
             return Ok(review);
         }
         catch (Exception ex)
@@ -88,13 +90,13 @@ public class ReviewsController : ControllerBase
         try
         {
             var cleanId = InputSanitizer.Clean(id, 80);
-            var review = await _db.Reviews.FirstOrDefaultAsync(r => r.Id == cleanId);
+            var review = await _db.Reviews.FirstOrDefaultAsync(r => r.Id == cleanId, HttpContext.RequestAborted);
             if (review == null) return NotFound(new { message = "Feedback item not found." });
 
             var oldValue = new { review.Status, review.Response };
             review.Status = InputSanitizer.Clean(request.Status, 30);
             review.Response = InputSanitizer.CleanNullable(request.Response, 1000);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(HttpContext.RequestAborted);
 
             if (_audit != null)
             {

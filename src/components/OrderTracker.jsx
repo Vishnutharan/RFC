@@ -185,6 +185,7 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder, showToa
 function DeliveryMap({ destination, etaMinutes }) {
   const mapRef = useRef(null);
   const [mapError, setMapError] = useState('');
+  const etaText = etaMinutes ? `ETA: ~${etaMinutes} minutes` : 'ETA: ~25 minutes';
 
   useEffect(() => {
     if (!googleMapsKey) {
@@ -203,8 +204,10 @@ function DeliveryMap({ destination, etaMinutes }) {
         zoom: 13,
         disableDefaultUI: true
       });
+      new window.google.maps.Marker({ position: STORE_LOCATION, map, label: 'RFC' });
+      new window.google.maps.Marker({ position: destination, map, label: 'You' });
       const directionsService = new window.google.maps.DirectionsService();
-      directionsRenderer = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: false });
+      directionsRenderer = new window.google.maps.DirectionsRenderer({ map, suppressMarkers: true });
 
       directionsService.route({
         origin: STORE_LOCATION,
@@ -233,6 +236,7 @@ function DeliveryMap({ destination, etaMinutes }) {
         document.head.appendChild(script);
       }
       script.addEventListener('load', renderMap, { once: true });
+      script.addEventListener('error', () => setMapError('Map could not be loaded.'), { once: true });
     }
 
     return () => {
@@ -241,10 +245,19 @@ function DeliveryMap({ destination, etaMinutes }) {
     };
   }, [destination]);
 
+  if (mapError || !googleMapsKey) {
+    return (
+      <div className="delivery-map-panel fallback">
+        <p>{etaText}</p>
+        <span>{mapError || 'Map is not configured.'}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="delivery-map-panel">
       <div ref={mapRef} className="delivery-map" />
-      <p>{etaMinutes ? `Estimated arrival in ~${etaMinutes} minutes` : 'Estimated arrival is being calculated.'}</p>
+      <p>{etaText}</p>
       {mapError && <span>{mapError}</span>}
     </div>
   );

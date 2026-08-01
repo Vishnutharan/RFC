@@ -123,10 +123,10 @@ export const updateOrderStatus = async (orderId, newStatus) => {
   });
 };
 
-export const createPaymentIntent = async ({ amount, customerEmail }) => {
+export const createPaymentIntent = async ({ order }) => {
   return requestJson('/payments/create-intent', {
     method: 'POST',
-    body: JSON.stringify({ amount, customerEmail })
+    body: JSON.stringify({ order })
   });
 };
 

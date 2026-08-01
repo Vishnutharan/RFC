@@ -53,6 +53,7 @@ public class OrdersController : ControllerBase
     public async Task<IActionResult> CreateOrder([FromBody] Order order)
     {
         if (_db == null) return ServiceUnavailable();
+        var cancellationToken = HttpContext.RequestAborted;
 
         try
         {
@@ -74,7 +75,7 @@ public class OrdersController : ControllerBase
             var pricedOrder = pricingResult.Order;
             if (pricedOrder.PaymentMethod == "card")
             {
-                var paymentCheck = await VerifyStripePaymentAsync(pricedOrder);
+                var paymentCheck = await VerifyStripePaymentAsync(pricedOrder, cancellationToken);
                 if (!paymentCheck.IsValid)
                 {
                     return paymentCheck.IsServiceUnavailable
@@ -105,19 +106,19 @@ public class OrdersController : ControllerBase
                 }
             }
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             var stockCheck = await DecrementStockAsync(pricedOrder);
             if (!stockCheck.IsValid)
             {
-                await transaction.RollbackAsync();
+                await transaction.RollbackAsync(cancellationToken);
                 return BadRequest(new { message = stockCheck.Message });
             }
 
             _db.Orders.Add(ToDbOrder(pricedOrder));
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
 
-            await _notifications.SendOrderPlacedAsync(pricedOrder);
+            _notifications.SendOrderPlacedInBackground(pricedOrder);
             return Ok(pricedOrder);
         }
         catch (Exception ex)
@@ -135,7 +136,9 @@ public class OrdersController : ControllerBase
         try
         {
             var clean = InputSanitizer.Clean(idOrNumber, 80);
-            var dbOrder = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == clean || o.OrderNumber == clean);
+            var dbOrder = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(
+                o => o.Id == clean || o.OrderNumber == clean,
+                HttpContext.RequestAborted);
             return dbOrder != null ? Ok(MapToOrderDto(dbOrder)) : NotFound(new { message = "Order not found" });
         }
         catch (Exception ex)
@@ -150,25 +153,39 @@ public class OrdersController : ControllerBase
     public async Task<IActionResult> CancelOrder(string idOrNumber, [FromBody] CancelOrderRequest request)
     {
         if (_db == null) return ServiceUnavailable();
+        var cancellationToken = HttpContext.RequestAborted;
 
         try
         {
             var cleanId = InputSanitizer.Clean(idOrNumber, 80);
-            var dbOrder = await _db.Orders.FirstOrDefaultAsync(o => o.Id == cleanId || o.OrderNumber == cleanId);
+            var dbOrder = await _db.Orders.FirstOrDefaultAsync(
+                o => o.Id == cleanId || o.OrderNumber == cleanId,
+                cancellationToken);
             if (dbOrder == null) return NotFound(new { message = "Order not found" });
             if (!CustomerCancellableStatuses.Contains(dbOrder.OrderStatus))
             {
                 return Conflict(new { message = "This order can no longer be cancelled online." });
             }
 
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            if (dbOrder.PaymentMethod == "card" && dbOrder.PaymentStatus == "Paid")
+            {
+                var refundCheck = await RefundStripePaymentAsync(dbOrder, cancellationToken);
+                if (!refundCheck.IsValid)
+                {
+                    return refundCheck.IsServiceUnavailable
+                        ? ServiceUnavailable()
+                        : BadRequest(new { message = refundCheck.Message });
+                }
+            }
+
+            await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             dbOrder.OrderStatus = "Cancelled";
             dbOrder.CancellationReason = InputSanitizer.Clean(request.Reason, 500);
             await RestoreStockAsync(dbOrder);
-            await _db.SaveChangesAsync();
-            await transaction.CommitAsync();
+            await _db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
 
-            await _notifications.SendCancellationEmailAsync(dbOrder, dbOrder.CancellationReason);
+            _notifications.SendCancellationEmailInBackground(dbOrder, dbOrder.CancellationReason);
             return Ok(MapToOrderDto(dbOrder));
         }
         catch (Exception ex)
@@ -264,7 +281,7 @@ public class OrdersController : ControllerBase
         for (var attempt = 0; attempt < 12; attempt++)
         {
             var orderNumber = $"RFC-{CreateOrderCode()}";
-            if (!await _db.Orders.AnyAsync(order => order.OrderNumber == orderNumber))
+            if (!await _db.Orders.AnyAsync(order => order.OrderNumber == orderNumber, HttpContext.RequestAborted))
             {
                 return orderNumber;
             }
@@ -294,7 +311,7 @@ public class OrdersController : ControllerBase
         {
             if (string.IsNullOrWhiteSpace(group.Key)) return new StockCheck(false, "One or more menu items are unavailable.");
 
-            var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key);
+            var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key, HttpContext.RequestAborted);
             var requested = group.Sum(item => item.Quantity);
             if (menuItem == null || menuItem.StockCount < requested)
             {
@@ -315,7 +332,7 @@ public class OrdersController : ControllerBase
         foreach (var group in items.GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(group.Key)) continue;
-            var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key);
+            var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key, HttpContext.RequestAborted);
             if (menuItem != null) menuItem.StockCount += group.Sum(item => item.Quantity);
         }
     }
@@ -324,7 +341,9 @@ public class OrdersController : ControllerBase
     {
         if (_db == null) return new OpeningHoursResult(false, "Unavailable");
 
-        var setting = await _db.StoreSettings.AsNoTracking().FirstOrDefaultAsync(item => item.Key == "OpeningHours");
+        var setting = await _db.StoreSettings.AsNoTracking().FirstOrDefaultAsync(
+            item => item.Key == "OpeningHours",
+            HttpContext.RequestAborted);
         if (setting == null || string.IsNullOrWhiteSpace(setting.Value))
         {
             return new OpeningHoursResult(true, "Opening hours unavailable");
@@ -370,7 +389,7 @@ public class OrdersController : ControllerBase
         }
     }
 
-    private async Task<PaymentCheck> VerifyStripePaymentAsync(Order order)
+    private async Task<PaymentCheck> VerifyStripePaymentAsync(Order order, CancellationToken cancellationToken)
     {
         var secretKey = _configuration["Stripe:SecretKey"];
         if (string.IsNullOrWhiteSpace(secretKey) || string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
@@ -382,7 +401,7 @@ public class OrdersController : ControllerBase
         {
             StripeConfiguration.ApiKey = secretKey;
             var service = new PaymentIntentService();
-            var intent = await service.GetAsync(order.StripePaymentIntentId);
+            var intent = await service.GetAsync(order.StripePaymentIntentId, requestOptions: null, cancellationToken: cancellationToken);
             var expectedAmount = (long)Math.Round(order.Total * 100m, MidpointRounding.AwayFromZero);
             if (intent.Status != "succeeded" ||
                 intent.Currency != "gbp" ||
@@ -397,6 +416,39 @@ public class OrdersController : ControllerBase
         {
             _logger.LogWarning(ex, "Stripe payment verification failed for {PaymentIntentId}", order.StripePaymentIntentId);
             return new PaymentCheck(false, true, "Card payment is temporarily unavailable.");
+        }
+    }
+
+    private async Task<PaymentCheck> RefundStripePaymentAsync(DbOrder order, CancellationToken cancellationToken)
+    {
+        var secretKey = _configuration["Stripe:SecretKey"];
+        if (string.IsNullOrWhiteSpace(secretKey) || string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
+        {
+            return new PaymentCheck(false, true, "Card refund is temporarily unavailable.");
+        }
+
+        try
+        {
+            StripeConfiguration.ApiKey = secretKey;
+            var service = new RefundService();
+            var refund = await service.CreateAsync(new RefundCreateOptions
+            {
+                PaymentIntent = order.StripePaymentIntentId,
+                Reason = "requested_by_customer"
+            }, requestOptions: null, cancellationToken: cancellationToken);
+
+            if (refund.Status is "succeeded" or "pending")
+            {
+                order.PaymentStatus = "Refunded";
+                return new PaymentCheck(true, false, string.Empty);
+            }
+
+            return new PaymentCheck(false, false, "Card refund could not be confirmed.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Stripe refund failed for {PaymentIntentId}", order.StripePaymentIntentId);
+            return new PaymentCheck(false, true, "Card refund is temporarily unavailable.");
         }
     }
 

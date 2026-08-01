@@ -130,7 +130,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
     const card = elements.getElement(CardElement);
     if (!card) throw new Error('Card details are not ready.');
 
-    const intent = await createPaymentIntent({ amount: total, customerEmail: formData.email });
+    const intent = await createPaymentIntent({ order: buildOrderPayload(null) });
     const result = await stripe.confirmCardPayment(intent.clientSecret, {
       payment_method: {
         card,

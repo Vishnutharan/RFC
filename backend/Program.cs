@@ -2,6 +2,8 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Polly;
+using Polly.Extensions.Http;
 using RFC.Api.Data;
 using RFC.Api.Hubs;
 using RFC.Api.Infrastructure;
@@ -85,13 +87,20 @@ builder.Services.AddRateLimiter(options =>
         limiter.Window = TimeSpan.FromMinutes(1);
         limiter.QueueLimit = 0;
     });
+    options.AddFixedWindowLimiter("webhook", limiter =>
+    {
+        limiter.PermitLimit = 100;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+    });
 });
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<OrderPricingService>();
 builder.Services.AddSingleton<DeliveryRadiusService>();
 builder.Services.AddSingleton<NotificationService>();
-builder.Services.AddHttpClient<GoogleMapsService>();
+builder.Services.AddHttpClient<GoogleMapsService>()
+    .AddPolicyHandler(GetGoogleMapsRetryPolicy());
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks().AddCheck<PostgresHealthCheck>("postgres");
 builder.Services.AddControllers();
@@ -138,4 +147,12 @@ static string BuildSupabaseCspSource(string? value)
     }
 
     return $"https://{new Uri(value).Host}";
+}
+
+static IAsyncPolicy<HttpResponseMessage> GetGoogleMapsRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(response => (int)response.StatusCode == StatusCodes.Status429TooManyRequests)
+        .WaitAndRetryAsync(3, retry => TimeSpan.FromMilliseconds(250 * Math.Pow(2, retry)));
 }

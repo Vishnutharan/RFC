@@ -135,15 +135,7 @@ public partial class InitialCreate : Migration
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.Sql("""
-            DROP TABLE IF EXISTS store_settings;
-            DROP TABLE IF EXISTS audit_logs;
-            DROP TABLE IF EXISTS login_attempts;
-            DROP TABLE IF EXISTS staff_users;
-            DROP TABLE IF EXISTS reviews;
-            DROP TABLE IF EXISTS orders;
-            DROP TABLE IF EXISTS customers;
-            DROP TABLE IF EXISTS menu_items;
-            """);
+        // Intentionally left empty. Rolling back this migration would destroy
+        // production order, customer, audit, and payment-reference data.
     }
 }
