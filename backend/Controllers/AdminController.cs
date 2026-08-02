@@ -91,11 +91,17 @@ public class AdminController : ControllerBase
             if (dbOrder == null) return NotFound(new { message = "Order not found" });
 
             var oldStatus = dbOrder.OrderStatus;
+            if (!OrderStatusTransitions.CanTransition(oldStatus, status))
+            {
+                return Conflict(new { message = $"Cannot move order from {oldStatus} to {status}." });
+            }
+
             dbOrder.OrderStatus = status;
 
             if (status == "Out for Delivery" && dbOrder.DeliveryLat != null && dbOrder.DeliveryLng != null)
             {
-                dbOrder.EtaMinutes ??= await _maps.GetEtaMinutesAsync(dbOrder.DeliveryLat.Value, dbOrder.DeliveryLng.Value, HttpContext.RequestAborted);
+                dbOrder.EtaMinutes = await _maps.GetEtaMinutesAsync(dbOrder.DeliveryLat.Value, dbOrder.DeliveryLng.Value, HttpContext.RequestAborted)
+                    ?? dbOrder.EtaMinutes;
             }
 
             await _db.SaveChangesAsync(HttpContext.RequestAborted);

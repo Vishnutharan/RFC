@@ -14,12 +14,12 @@ import PrintReceiptModal from './components/PrintReceiptModal';
 import Toast from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import PrivacyPolicy from './components/PrivacyPolicy';
-import { CATEGORIES } from './data/initialMenu';
-import { getMenuItems } from './services/api';
+import { CATEGORIES, MENU_ITEMS } from './data/initialMenu';
+import { getMenuItems, getOrder } from './services/api';
 import { useAuth } from './hooks/useAuth';
 import { useCart } from './hooks/useCart';
 import { useOrders } from './hooks/useOrders';
-import './styles/main.css';
+import { ThemeProvider } from './hooks/useTheme';
 
 export default function App() {
   const [activeCategory, setActiveCategory] = useState('all');
@@ -51,6 +51,29 @@ export default function App() {
   const orders = useOrders(showToast);
 
   useEffect(() => {
+    const match = window.location.pathname.match(/^\/track\/([^/]+)/);
+    if (!match) return undefined;
+
+    let isActive = true;
+    const accessToken = new URLSearchParams(window.location.search).get('accessToken') || undefined;
+    getOrder(decodeURIComponent(match[1]), accessToken)
+      .then((trackedOrder) => {
+        if (!isActive) return;
+        orders.setActiveOrder({
+          ...(trackedOrder || {}),
+          accessToken: trackedOrder?.accessToken || accessToken
+        });
+      })
+      .catch((error) => {
+        if (isActive) showToast(error.message || 'Could not open this tracking link.', 'error');
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [orders.setActiveOrder, showToast]);
+
+  useEffect(() => {
     let isActive = true;
     setIsLoadingMenu(true);
 
@@ -61,8 +84,8 @@ export default function App() {
       })
       .catch((error) => {
         if (!isActive) return;
-        setMenuItems([]);
-        showToast(error.message || 'Menu could not be loaded.', 'error');
+        setMenuItems(MENU_ITEMS);
+        showToast(error.message || 'Using the offline menu while the database is unavailable.', 'warning');
       })
       .finally(() => {
         if (isActive) setIsLoadingMenu(false);
@@ -83,6 +106,12 @@ export default function App() {
       return matchesCategory && matchesSearch;
     });
   }, [activeCategory, menuItems, searchQuery]);
+
+  const suggestedAddOns = useMemo(() => (
+    menuItems
+      .filter((item) => ['sides', 'desserts-drinks'].includes(item.categoryId))
+      .slice(0, 6)
+  ), [menuItems]);
 
   const handleStaffPanelClick = useCallback(() => {
     if (isAdminView) {
@@ -135,7 +164,8 @@ export default function App() {
   }, [cart, orders]);
 
   return (
-    <div className="app-container">
+    <ThemeProvider>
+      <div className="app-container">
       <Header
         cartCount={cart.cartCount}
         orderMode={orderMode}
@@ -164,14 +194,14 @@ export default function App() {
         </ErrorBoundary>
       ) : (
         <>
-          <Navigation
-            activeCategory={activeCategory}
-            setActiveCategory={setActiveCategory}
-          />
-
           <Banner
             onApplyVoucher={cart.applyVoucher}
             showToast={showToast}
+          />
+
+          <Navigation
+            activeCategory={activeCategory}
+            setActiveCategory={setActiveCategory}
           />
 
           <main id="menu" className="menu-main-container">
@@ -259,6 +289,8 @@ export default function App() {
           setIsCartOpen(false);
           setIsCheckoutOpen(true);
         }}
+        suggestedItems={suggestedAddOns}
+        onAddSuggestedItem={cart.addMenuItem}
       />
 
       <ErrorBoundary title="Checkout failed">
@@ -300,7 +332,11 @@ export default function App() {
       />
 
       <PrivacyPolicy isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
-      <Toast toasts={toasts} />
-    </div>
+      <Toast
+        toasts={toasts}
+        dismissToast={(id) => setToasts((prev) => prev.filter((toast) => toast.id !== id))}
+      />
+      </div>
+    </ThemeProvider>
   );
 }

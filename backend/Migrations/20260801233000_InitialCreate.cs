@@ -52,6 +52,9 @@ public partial class InitialCreate : Migration
                 customer_name varchar(100) NOT NULL,
                 customer_phone varchar(50) NOT NULL,
                 customer_email varchar(120) NOT NULL,
+                customer_id varchar(80) NULL,
+                order_access_token_hash varchar(128) NULL,
+                order_access_token_expires_at timestamptz NULL,
                 delivery_address varchar(500) NOT NULL DEFAULT '',
                 delivery_postcode varchar(20) NOT NULL DEFAULT '',
                 delivery_notes varchar(500) NOT NULL DEFAULT '',
@@ -78,8 +81,13 @@ public partial class InitialCreate : Migration
             ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_lng numeric(9, 6) NULL;
             ALTER TABLE orders ADD COLUMN IF NOT EXISTS eta_minutes integer NULL;
             ALTER TABLE orders ADD COLUMN IF NOT EXISTS driver_id varchar(80) NULL;
+            ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_id varchar(80) NULL;
+            ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_access_token_hash varchar(128) NULL;
+            ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_access_token_expires_at timestamptz NULL;
             CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_order_number ON orders (order_number);
             CREATE INDEX IF NOT EXISTS ix_orders_stripe_payment_intent_id ON orders (stripe_payment_intent_id);
+            CREATE INDEX IF NOT EXISTS ix_orders_customer_id ON orders (customer_id);
+            CREATE INDEX IF NOT EXISTS ix_orders_order_access_token_hash ON orders (order_access_token_hash);
 
             CREATE TABLE IF NOT EXISTS reviews (
                 id varchar(80) PRIMARY KEY,

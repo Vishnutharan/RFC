@@ -1,66 +1,70 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
+import { AlertCircle, CheckCircle, Info, TriangleAlert, X } from 'lucide-react';
 
-const ToastItem = ({ id, message, type = 'info', onDismiss, duration = 4000 }) => {
+const icons = {
+  success: CheckCircle,
+  error: AlertCircle,
+  warning: TriangleAlert,
+  info: Info
+};
+
+function ToastItem({ id, message, type = 'info', onDismiss, duration = 4000 }) {
   const [isClosing, setIsClosing] = useState(false);
+  const Icon = icons[type] || Info;
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsClosing(true);
-      // Wait for the exit animation to finish before removing from state
-      setTimeout(() => onDismiss(id), 400); 
+      setTimeout(() => onDismiss(id), 320);
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [id, duration, onDismiss]);
+  }, [duration, id, onDismiss]);
 
   const handleClose = () => {
     setIsClosing(true);
-    setTimeout(() => onDismiss(id), 400);
-  };
-
-  const getIcon = () => {
-    switch (type) {
-      case 'success': return <CheckCircle size={24} />;
-      case 'error': return <AlertCircle size={24} />;
-      case 'info':
-      default: return <Info size={24} />;
-    }
+    setTimeout(() => onDismiss(id), 320);
   };
 
   return (
     <div className={`toast toast-${type} ${isClosing ? 'closing' : ''}`}>
       <div className="toast-icon">
-        {getIcon()}
+        <Icon size={23} />
       </div>
       <div className="toast-content">
         <p>{message}</p>
       </div>
-      <button className="toast-close" onClick={handleClose} aria-label="Dismiss">
+      <button className="toast-close" type="button" onClick={handleClose} aria-label="Dismiss notification">
         <X size={16} />
       </button>
-      <div 
-        className="toast-progress" 
-        style={{ animationDuration: `${duration}ms` }} 
-      />
+      <div className="toast-progress" style={{ animationDuration: `${duration}ms` }} />
     </div>
   );
-};
+}
 
-const Toast = ({ toasts, dismissToast }) => {
+export default function Toast({ toasts, dismissToast }) {
   if (!toasts || toasts.length === 0) return null;
+  const onDismiss = dismissToast || (() => {});
 
   return (
     <div className="toast-container">
-      {toasts.map((toast) => (
-        <ToastItem
-          key={toast.id}
-          {...toast}
-          onDismiss={dismissToast}
-        />
+      {toasts.slice(-3).map((toast) => (
+        <ToastItem key={toast.id} {...toast} onDismiss={onDismiss} />
       ))}
     </div>
   );
+}
+
+ToastItem.propTypes = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  message: PropTypes.string.isRequired,
+  type: PropTypes.oneOf(['success', 'error', 'warning', 'info']),
+  onDismiss: PropTypes.func.isRequired,
+  duration: PropTypes.number
 };
 
-export default Toast;
+Toast.propTypes = {
+  toasts: PropTypes.array,
+  dismissToast: PropTypes.func
+};

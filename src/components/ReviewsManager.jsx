@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Star, MessageSquare, AlertCircle, CheckCircle, Send, ThumbsUp, Filter } from 'lucide-react';
-import { getReviewsAndComplaints, addReviewOrComplaint, updateFeedbackStatus } from '../services/feedbackApi';
+import { useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
+import { Filter, MessageSquare, Send, Star } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { addReviewOrComplaint, getReviewsAndComplaints, updateFeedbackStatus } from '../services/feedbackApi';
+
+const filters = ['All', '5 Stars', '4 Stars', 'With Photos', 'With Replies', 'Complaints'];
 
 export default function ReviewsManager({ isAdmin = false, showToast }) {
   const [items, setItems] = useState([]);
-  const [filterType, setFilterType] = useState('All'); // 'All', 'Reviews', 'Complaints', 'Pending'
-  
-  // Submission Form State
+  const [filterType, setFilterType] = useState('All');
+  const [activeRespondId, setActiveRespondId] = useState(null);
+  const [responseText, setResponseText] = useState('');
   const [form, setForm] = useState({
     customerName: '',
     rating: 5,
-    type: 'Review', // 'Review' or 'Complaint'
+    type: 'Review',
     category: 'Food Quality',
     comment: '',
     orderNumber: ''
   });
-
-  // Admin Response State
-  const [activeRespondId, setActiveRespondId] = useState(null);
-  const [responseText, setResponseText] = useState('');
 
   const loadData = async () => {
     try {
@@ -26,7 +26,7 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
       setItems(data || []);
     } catch (error) {
       setItems([]);
-      if (showToast) showToast(error.message || 'Feedback could not be loaded.', 'error');
+      showToast?.(error.message || 'Feedback could not be loaded.', 'error');
     }
   };
 
@@ -34,20 +34,38 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
     loadData();
   }, []);
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
+  const avgRating = items.length
+    ? (items.reduce((sum, item) => sum + Number(item.rating || 5), 0) / items.length).toFixed(1)
+    : '5.0';
+  const pendingComplaintsCount = items.filter((item) => item.type === 'Complaint' && item.status === 'Pending').length;
+
+  const filtered = useMemo(() => items.filter((item) => {
+    if (filterType === '5 Stars') return Number(item.rating || 0) === 5;
+    if (filterType === '4 Stars') return Number(item.rating || 0) === 4;
+    if (filterType === 'With Photos') return Boolean(item.photoUrl || item.imageUrl);
+    if (filterType === 'With Replies') return Boolean(item.response);
+    if (filterType === 'Complaints') return item.type === 'Complaint';
+    return true;
+  }), [filterType, items]);
+
+  const handleFormSubmit = async (event) => {
+    event.preventDefault();
     if (!form.comment.trim()) return;
 
     try {
       await addReviewOrComplaint(form);
       setForm({
-        customerName: '', rating: 5, type: 'Review',
-        category: 'Food Quality', comment: '', orderNumber: ''
+        customerName: '',
+        rating: 5,
+        type: 'Review',
+        category: 'Food Quality',
+        comment: '',
+        orderNumber: ''
       });
       await loadData();
-      if (showToast) showToast(form.type === 'Complaint' ? 'Complaint submitted. Manager will respond shortly!' : 'Thank you for your review!');
+      showToast?.(form.type === 'Complaint' ? 'Complaint submitted. A manager will respond shortly.' : 'Thank you for your review.');
     } catch (error) {
-      if (showToast) showToast(error.message || 'Feedback could not be submitted.', 'error');
+      showToast?.(error.message || 'Feedback could not be submitted.', 'error');
     }
   };
 
@@ -57,239 +75,181 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
       setActiveRespondId(null);
       setResponseText('');
       await loadData();
-      if (showToast) showToast('Status and response updated!');
+      showToast?.('Feedback response updated.');
     } catch (error) {
-      if (showToast) showToast(error.message || 'Feedback status could not be updated.', 'error');
+      showToast?.(error.message || 'Feedback status could not be updated.', 'error');
     }
   };
 
-  // Filtered List
-  const filtered = items.filter(item => {
-    if (filterType === 'Reviews') return item.type === 'Review';
-    if (filterType === 'Complaints') return item.type === 'Complaint';
-    if (filterType === 'Pending') return item.status === 'Pending';
-    return true;
-  });
-
-  const avgRating = items.length
-    ? (items.reduce((s, i) => s + (i.rating || 5), 0) / items.length).toFixed(1)
-    : '5.0';
-
-  const pendingComplaintsCount = items.filter(i => i.type === 'Complaint' && i.status === 'Pending').length;
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Top Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)',
-        borderRadius: 'var(--radius)', padding: '20px', border: '1px solid #FDE2E2',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px'
-      }}>
+    <div id="reviews" className="reviews-shell">
+      <section className="reviews-summary">
         <div>
-          <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Star color="var(--amber)" fill="var(--amber)" size={22} /> {avgRating} / 5.0 Rating &amp; Feedback
+          <h3>
+            <Star color="var(--color-accent-primary)" fill="var(--color-accent-primary)" size={24} />
+            {' '}{avgRating} / 5.0 Rating
           </h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '2px' }}>
-            {items.length} verified customer reviews · {pendingComplaintsCount} pending complaint{pendingComplaintsCount === 1 ? '' : 's'}
+          <p className="modal-subtitle">
+            {items.length} verified reviews - {pendingComplaintsCount} pending complaint{pendingComplaintsCount === 1 ? '' : 's'}
           </p>
         </div>
-
-        {/* Filter Buttons */}
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {['All', 'Reviews', 'Complaints', 'Pending'].map(t => (
+        <div className="filter-tabs">
+          {filters.map((filter) => (
             <button
-              key={t}
-              className={`cat-tab ${filterType === t ? 'active' : ''}`}
-              onClick={() => setFilterType(t)}
-              style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+              key={filter}
+              className={`filter-tab ${filterType === filter ? 'active' : ''}`}
+              type="button"
+              onClick={() => setFilterType(filter)}
             >
-              {t} {t === 'Pending' && pendingComplaintsCount > 0 && `(${pendingComplaintsCount})`}
+              <Filter size={14} /> {filter}
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* Customer Submission Form (Hidden if Admin viewing reviews only) */}
       {!isAdmin && (
-        <form onSubmit={handleFormSubmit} style={{
-          background: 'var(--white)', padding: '20px', borderRadius: 'var(--radius)',
-          border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)'
-        }}>
-          <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.05rem', fontWeight: 800, marginBottom: '12px' }}>
-            ✍️ Leave a Review or Submit a Complaint
-          </h4>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Feedback Type</label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem', fontWeight: 700 }}
-              >
-                <option value="Review">Positive Review</option>
-                <option value="Complaint">Report Complaint / Issue</option>
+        <form className="reviews-form dashboard-card" onSubmit={handleFormSubmit}>
+          <h4>Leave a review or report an issue</h4>
+          <div className="checkout-grid">
+            <label className="input-group">
+              <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>
+                <option value="Review">Positive review</option>
+                <option value="Complaint">Complaint / issue</option>
               </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Category</label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem' }}
-              >
-                <option value="Food Quality">Food Quality &amp; Taste</option>
-                <option value="Delivery Speed">Delivery Speed</option>
-                <option value="Missing Item">Missing / Incorrect Item</option>
-                <option value="Customer Support">Customer Service</option>
+            </label>
+            <label className="input-group">
+              <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+                <option value="Food Quality">Food quality</option>
+                <option value="Delivery Speed">Delivery speed</option>
+                <option value="Missing Item">Missing item</option>
+                <option value="Customer Support">Customer support</option>
               </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Star Rating</label>
-              <div style={{ display: 'flex', gap: '4px', paddingTop: '4px' }}>
-                {[1, 2, 3, 4, 5].map(star => (
-                  <button
-                    type="button"
-                    key={star}
-                    onClick={() => setForm({ ...form, rating: star })}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <Star
-                      size={20}
-                      color="var(--amber)"
-                      fill={star <= form.rating ? 'var(--amber)' : 'transparent'}
-                    />
-                  </button>
-                ))}
-              </div>
+            </label>
+            <div className="stars" aria-label={`${form.rating} star rating`}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button key={star} type="button" onClick={() => setForm({ ...form, rating: star })} aria-label={`${star} stars`}>
+                  <Star size={22} fill={star <= form.rating ? 'currentColor' : 'transparent'} />
+                </button>
+              ))}
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-            <input
-              type="text"
-              placeholder="Your Name (Optional)"
-              value={form.customerName}
-              onChange={(e) => setForm({ ...form, customerName: e.target.value })}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem' }}
-            />
-            <input
-              type="text"
-              placeholder="Order Number (Optional e.g. RFC-12345)"
-              value={form.orderNumber}
-              onChange={(e) => setForm({ ...form, orderNumber: e.target.value })}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.85rem' }}
-            />
+          <div className="checkout-address-grid" style={{ marginTop: 10 }}>
+            <label className="input-group">
+              <input
+                type="text"
+                placeholder="Your name"
+                value={form.customerName}
+                onChange={(event) => setForm({ ...form, customerName: event.target.value })}
+              />
+            </label>
+            <label className="input-group">
+              <input
+                type="text"
+                placeholder="Order number"
+                value={form.orderNumber}
+                onChange={(event) => setForm({ ...form, orderNumber: event.target.value })}
+              />
+            </label>
           </div>
 
           <textarea
-            placeholder={form.type === 'Complaint' ? 'Please describe what went wrong with your order...' : 'Write your review about the food and service...'}
+            className="notes-input"
+            placeholder={form.type === 'Complaint' ? 'Tell us what went wrong...' : 'Tell Watford what you loved...'}
             value={form.comment}
-            onChange={(e) => setForm({ ...form, comment: e.target.value })}
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border)', fontSize: '0.88rem', minHeight: '70px', marginBottom: '12px'
-            }}
+            onChange={(event) => setForm({ ...form, comment: event.target.value })}
+            style={{ marginTop: 10 }}
           />
 
-          <button type="submit" className="btn-submit-modal" style={{ width: 'auto', padding: '10px 24px' }}>
-            <Send size={15} /> Submit {form.type}
+          <button type="submit" className="btn-submit-modal" style={{ marginTop: 12, width: 'auto' }}>
+            <Send size={16} /> Submit {form.type}
           </button>
         </form>
       )}
 
-      {/* Reviews & Complaints Feed */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {filtered.length === 0 ? (
-          <p style={{ textAlign: 'center', padding: '30px', color: 'var(--text3)' }}>No feedback found in this category.</p>
-        ) : (
-          filtered.map(item => (
-            <div key={item.id} style={{
-              background: 'var(--white)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)', padding: '16px',
-              borderLeft: item.type === 'Complaint' ? '4px solid var(--red)' : '4px solid var(--green)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontWeight: 800, fontSize: '0.92rem' }}>{item.customerName}</span>
-                  {item.orderNumber && (
-                    <span style={{ fontSize: '0.75rem', background: 'var(--bg)', padding: '2px 8px', borderRadius: '4px', color: 'var(--text2)' }}>
-                      #{item.orderNumber}
-                    </span>
-                  )}
-                  <span className={`status-badge ${item.type === 'Complaint' ? 'status-preparing' : 'status-completed'}`}>
-                    {item.type} · {item.category}
-                  </span>
+      {filtered.length === 0 ? (
+        <p className="empty-state">No feedback found in this category.</p>
+      ) : (
+        <div className="review-grid">
+          {filtered.map((item, index) => (
+            <motion.article
+              key={item.id || index}
+              className="review-card"
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: Math.min(index, 8) * 0.04 }}
+            >
+              <div className="review-meta-row">
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span className="avatar-initial">{(item.customerName || 'R').slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{item.customerName || 'RFC customer'}</strong>
+                    <p className="cart-line-meta">{item.date ? new Date(item.date).toLocaleDateString() : 'Recent'} - {item.category}</p>
+                  </div>
                 </div>
-
-                <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>
-                  {item.date ? new Date(item.date).toLocaleDateString() : 'Recent'}
+                <span className={`status-badge ${item.type === 'Complaint' ? 'status-cancelled' : 'status-completed'}`}>
+                  {item.type}
                 </span>
               </div>
 
-              {/* Star rating */}
-              <div style={{ display: 'flex', gap: '2px', marginBottom: '8px' }}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} size={14} color="var(--amber)" fill={i < item.rating ? 'var(--amber)' : 'transparent'} />
+              <div className="stars">
+                {Array.from({ length: 5 }).map((_, starIndex) => (
+                  <Star key={starIndex} size={15} fill={starIndex < Number(item.rating || 5) ? 'currentColor' : 'transparent'} />
                 ))}
               </div>
 
-              {/* Comment text */}
-              <p style={{ fontSize: '0.88rem', color: 'var(--text)', lineHeight: 1.5 }}>{item.comment}</p>
+              {(item.photoUrl || item.imageUrl) && (
+                <img className="item-modal-image" src={item.photoUrl || item.imageUrl} alt="Customer submitted food review" loading="lazy" />
+              )}
 
-              {/* Manager Response */}
+              <p>{item.comment}</p>
+
               {item.response && (
-                <div style={{
-                  background: 'var(--bg)', borderLeft: '3px solid var(--amber)',
-                  padding: '10px 12px', marginTop: '10px', borderRadius: '0 8px 8px 0', fontSize: '0.82rem'
-                }}>
-                  <strong style={{ color: 'var(--text)' }}>Store Manager Response:</strong>
-                  <p style={{ color: 'var(--text2)', marginTop: '2px' }}>{item.response}</p>
+                <div className="manager-response">
+                  <strong>Store manager response</strong>
+                  <p>{item.response}</p>
                 </div>
               )}
 
-              {/* Admin Actions */}
               {isAdmin && (
-                <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #F3F4F6', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="admin-response-row">
                   {activeRespondId === item.id ? (
-                    <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                    <div className="voucher-input-group">
+                      <MessageSquare size={16} />
                       <input
                         type="text"
                         placeholder="Write manager reply or voucher code..."
                         value={responseText}
-                        onChange={(e) => setResponseText(e.target.value)}
-                        style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '0.82rem' }}
+                        onChange={(event) => setResponseText(event.target.value)}
                       />
-                      <button
-                        onClick={() => handleAdminRespond(item.id, 'Resolved')}
-                        style={{ padding: '6px 12px', background: 'var(--green)', color: '#fff', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 700 }}
-                      >
-                        Save &amp; Resolve
+                      <button className="btn-apply-voucher" type="button" onClick={() => handleAdminRespond(item.id)}>
+                        Save
                       </button>
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setActiveRespondId(item.id); setResponseText(item.response || ''); }}
-                      className="btn-add-item"
-                      style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                      className="btn-add-item compact"
+                      type="button"
+                      onClick={() => {
+                        setActiveRespondId(item.id);
+                        setResponseText(item.response || '');
+                      }}
                     >
-                      <MessageSquare size={13} /> {item.response ? 'Edit Reply' : 'Respond to Customer'}
+                      <MessageSquare size={14} /> {item.response ? 'Edit reply' : 'Reply'}
                     </button>
-                  )}
-
-                  {item.type === 'Complaint' && (
-                    <span className={`status-badge ${item.status === 'Resolved' ? 'status-completed' : 'status-preparing'}`} style={{ marginLeft: 'auto' }}>
-                      Status: {item.status}
-                    </span>
                   )}
                 </div>
               )}
-            </div>
-          ))
-        )}
-      </div>
+            </motion.article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
+ReviewsManager.propTypes = {
+  isAdmin: PropTypes.bool,
+  showToast: PropTypes.func
+};

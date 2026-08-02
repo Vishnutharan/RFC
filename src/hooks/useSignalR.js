@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { getHubUrl } from '../services/api';
 
-export const useSignalR = (orderNumber, onStatusUpdated) => {
+export const useSignalR = (orderNumber, accessToken, onStatusUpdated) => {
   const connectionRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -22,7 +22,7 @@ export const useSignalR = (orderNumber, onStatusUpdated) => {
 
     connection
       .start()
-      .then(() => connection.invoke('JoinOrderGroup', orderNumber))
+      .then(() => connection.invoke('JoinOrderGroup', orderNumber, accessToken || null))
       .then(() => {
         if (isActive) setIsConnected(true);
       })
@@ -38,7 +38,7 @@ export const useSignalR = (orderNumber, onStatusUpdated) => {
         .catch(() => {})
         .finally(() => connection.stop().catch(() => {}));
     };
-  }, [orderNumber, onStatusUpdated]);
+  }, [orderNumber, accessToken, onStatusUpdated]);
 
   return { isConnected };
 };

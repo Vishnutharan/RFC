@@ -23,7 +23,7 @@ public sealed class NotificationService
 
     public async Task SendOrderPlacedAsync(Order order)
     {
-        var trackingUrl = BuildTrackingUrl(order.OrderNumber);
+        var trackingUrl = BuildTrackingUrl(order.OrderNumber, order.AccessToken);
         await SendSmsAsync(
             order.CustomerPhone,
             $"Hi {order.CustomerName}, your RFC order #{order.OrderNumber} for GBP {order.Total:0.00} is confirmed. Track: {trackingUrl}");
@@ -161,10 +161,13 @@ public sealed class NotificationService
         }
     }
 
-    private string BuildTrackingUrl(string orderNumber)
+    private string BuildTrackingUrl(string orderNumber, string? accessToken = null)
     {
         var baseUrl = _configuration["PublicAppUrl"]?.TrimEnd('/') ?? "https://www.rfcchickenwatford.com";
-        return $"{baseUrl}/track/{Uri.EscapeDataString(orderNumber)}";
+        var url = $"{baseUrl}/track/{Uri.EscapeDataString(orderNumber)}";
+        return string.IsNullOrWhiteSpace(accessToken)
+            ? url
+            : $"{url}?accessToken={Uri.EscapeDataString(accessToken)}";
     }
 
     private static string BuildReceiptHtml(Order order, string trackingUrl)

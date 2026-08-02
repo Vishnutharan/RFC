@@ -53,6 +53,9 @@ create table if not exists public.orders (
     customer_name varchar(100) not null,
     customer_phone varchar(50) not null,
     customer_email varchar(120) not null,
+    customer_id varchar(80),
+    order_access_token_hash varchar(128),
+    order_access_token_expires_at timestamptz,
     delivery_address text not null,
     delivery_postcode varchar(20) not null,
     delivery_notes text,
@@ -80,6 +83,9 @@ alter table public.orders add column if not exists delivery_lat numeric(9, 6);
 alter table public.orders add column if not exists delivery_lng numeric(9, 6);
 alter table public.orders add column if not exists eta_minutes integer;
 alter table public.orders add column if not exists driver_id varchar(80);
+alter table public.orders add column if not exists customer_id varchar(80);
+alter table public.orders add column if not exists order_access_token_hash varchar(128);
+alter table public.orders add column if not exists order_access_token_expires_at timestamptz;
 
 create table if not exists public.reviews (
     id varchar(50) primary key,
@@ -147,6 +153,8 @@ create unique index if not exists ix_login_attempts_email_lower on public.login_
 create index if not exists ix_orders_created_at on public.orders (created_at desc);
 create index if not exists ix_orders_order_status on public.orders (order_status);
 create index if not exists ix_orders_stripe_payment_intent_id on public.orders (stripe_payment_intent_id);
+create index if not exists ix_orders_customer_id on public.orders (customer_id);
+create index if not exists ix_orders_order_access_token_hash on public.orders (order_access_token_hash);
 create index if not exists ix_reviews_date on public.reviews (date desc);
 
 insert into public.menu_categories (id, name, display_order, icon_name) values

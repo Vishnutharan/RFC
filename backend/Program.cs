@@ -98,7 +98,9 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<OrderAccessService>();
 builder.Services.AddScoped<OrderPricingService>();
+builder.Services.AddScoped<IPaymentGateway, StripePaymentGateway>();
 builder.Services.AddSingleton<DeliveryRadiusService>();
 builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddHttpClient<GoogleMapsService>()

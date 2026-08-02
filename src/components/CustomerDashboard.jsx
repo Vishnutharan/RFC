@@ -1,44 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import { X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
+import { Check, Edit3, Gift, Home, LogOut, Mail, MapPin, MessageSquare, Phone, Printer, RotateCcw, Save, Search, ShoppingBag, Sparkles, Tag, User, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
-import { getCurrentUser, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
 import { deleteCurrentCustomer } from '../services/api';
+import { getCurrentUser, loginCustomer, logoutCustomer, registerCustomer, updateCustomerProfile } from '../services/customerAuth';
 
 const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
 const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
 
+const tabs = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'orders', label: 'Orders', icon: ShoppingBag },
+  { id: 'profile', label: 'Account', icon: User },
+  { id: 'reviews', label: 'Reviews', icon: MessageSquare }
+];
+
 export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, showToast }) {
-  const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'profile', 'loyalty', 'vouchers', 'reviews'
+  const [activeTab, setActiveTab] = useState('home');
   const [currentUser, setCurrentUser] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
-
-  // Profile Edit State
-  const [profileForm, setProfileForm] = useState({
-    name: '', phone: '', email: '', address: '', postcode: ''
-  });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-
-  // Auth Mode (if logged out or switching account)
-  const [authMode, setAuthMode] = useState('none'); // 'none', 'login', 'register'
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', address: '', postcode: '', consentAccepted: false });
+  const [authMode, setAuthMode] = useState('none');
   const [authError, setAuthError] = useState('');
+  const [profileForm, setProfileForm] = useState({ name: '', phone: '', email: '', address: '', postcode: '' });
+  const [authForm, setAuthForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    phone: '',
+    address: '',
+    postcode: '',
+    consentAccepted: false
+  });
 
   useEffect(() => {
     let isActive = true;
 
     if (isOpen) {
       getCurrentUser()
-        .then(u => {
+        .then((user) => {
           if (!isActive) return;
-          setCurrentUser(u);
-          setAuthMode(u ? 'none' : 'login');
+          setCurrentUser(user);
+          setAuthMode(user ? 'none' : 'login');
           setProfileForm({
-            name: u?.name || '',
-            phone: u?.phone || '',
-            email: u?.email || '',
-            address: u?.address || '',
-            postcode: u?.postcode || ''
+            name: user?.name || '',
+            phone: user?.phone || '',
+            email: user?.email || '',
+            address: user?.address || '',
+            postcode: user?.postcode || ''
           });
         })
         .catch(() => {
@@ -53,57 +64,34 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
     };
   }, [isOpen]);
 
+  const loyaltyCount = (orders.length % 8) || Math.min(7, orders.length);
+  const ordersNeeded = Math.max(1, 8 - loyaltyCount);
+  const recentOrders = useMemo(() => orders.slice(0, 4), [orders]);
+
   if (!isOpen) return null;
 
-  const handleSaveProfile = async (e) => {
-    e.preventDefault();
-    if (!currentUser) {
-      setAuthMode('login');
-      return;
-    }
-
-    try {
-      const updated = await updateCustomerProfile(profileForm);
-      setCurrentUser(updated);
-      setIsEditingProfile(false);
-      if (showToast) showToast('Profile details updated successfully.');
-    } catch (error) {
-      if (showToast) showToast(error.message || 'Profile could not be updated.', 'error');
-    }
-  };
-
-  const handleAuthSubmit = async (e) => {
-    e.preventDefault();
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
     setAuthError('');
 
-    if (authMode === 'login') {
-      try {
-        const res = await loginCustomer(authForm.email, authForm.password);
-        setCurrentUser(res.user);
+    try {
+      if (authMode === 'login') {
+        const result = await loginCustomer(authForm.email, authForm.password);
+        setCurrentUser(result.user);
         setProfileForm({
-          name: res.user.name || '',
-          phone: res.user.phone || '',
-          email: res.user.email || '',
-          address: res.user.address || '',
-          postcode: res.user.postcode || ''
+          name: result.user.name || '',
+          phone: result.user.phone || '',
+          email: result.user.email || '',
+          address: result.user.address || '',
+          postcode: result.user.postcode || ''
         });
         setAuthMode('none');
-        if (showToast) showToast(`Welcome back, ${res.user.name}!`);
-      } catch (error) {
-        setAuthError(error.message || 'Invalid email or password');
-      }
-    } else if (authMode === 'register') {
-      if (!authForm.name || !authForm.email || !authForm.password) {
-        setAuthError('Please fill in required fields (Name, Email, Password)');
-        return;
-      }
-
-      if (!authForm.consentAccepted) {
-        setAuthError('Please agree to the Privacy Policy and Terms.');
-        return;
-      }
-
-      try {
+        showToast?.(`Welcome back, ${result.user.name}.`);
+      } else {
+        if (!authForm.consentAccepted) {
+          setAuthError('Please accept the Privacy Policy and Terms.');
+          return;
+        }
         const user = await registerCustomer(authForm);
         setCurrentUser(user);
         setProfileForm({
@@ -114,10 +102,22 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
           postcode: user.postcode || ''
         });
         setAuthMode('none');
-        if (showToast) showToast(`Account created. Welcome ${user.name}`);
-      } catch (error) {
-        setAuthError(error.message || 'Account could not be created');
+        showToast?.(`Account created. Welcome ${user.name}.`);
       }
+    } catch (error) {
+      setAuthError(error.message || 'Account request failed.');
+    }
+  };
+
+  const handleSaveProfile = async (event) => {
+    event.preventDefault();
+    try {
+      const updated = await updateCustomerProfile(profileForm);
+      setCurrentUser(updated);
+      setIsEditingProfile(false);
+      showToast?.('Profile details updated.');
+    } catch (error) {
+      showToast?.(error.message || 'Profile could not be updated.', 'error');
     }
   };
 
@@ -126,391 +126,380 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
     setCurrentUser(null);
     setAuthMode('login');
     setIsEditingProfile(false);
-    if (showToast) showToast('Logged out.', 'info');
+    showToast?.('Logged out.', 'info');
   };
 
   const handleDeleteAccount = async () => {
     if (!window.confirm('Delete your RFC account and anonymise retained order records?')) return;
-
     try {
       await deleteCurrentCustomer();
       setCurrentUser(null);
       setAuthMode('login');
-      if (showToast) showToast('Account deleted and order records anonymised.', 'info');
+      showToast?.('Account deleted and order records anonymised.', 'info');
     } catch (error) {
-      if (showToast) showToast(error.message || 'Account could not be deleted.', 'error');
+      showToast?.(error.message || 'Account could not be deleted.', 'error');
     }
   };
 
-  const loyaltyCount = (orders.length % 8) || 7;
-  const ordersNeeded = 8 - loyaltyCount;
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: '740px' }} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '44px', height: '44px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--red), var(--amber))',
-              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 800, fontSize: '1.1rem'
-            }}>
-              <User size={22} />
-            </div>
+    <AnimatePresence>
+      <motion.div className="modal-overlay" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div
+          className="modal-card customer-dashboard-card"
+          onClick={(event) => event.stopPropagation()}
+          initial={{ opacity: 0, y: 26 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 26 }}
+        >
+          <div className="modal-header">
             <div>
-              <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 800 }}>
-                {currentUser?.name || 'Customer Profile'}
-              </h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-                {currentUser ? `${currentUser.address || 'No saved address'}, ${currentUser.postcode || ''} · ${currentUser.email}` : 'Login to save addresses and reorder faster'}
+              <h3>{currentUser ? `Good evening, ${currentUser.name?.split(' ')[0] || 'friend'}` : 'Your RFC Account'}</h3>
+              <p className="modal-subtitle">
+                {currentUser ? 'Rainy night? Comfort food incoming.' : 'Login to reorder favourites and save delivery details.'}
               </p>
             </div>
+            <button className="close-btn" type="button" onClick={onClose} aria-label="Close account">
+              <X size={18} />
+            </button>
           </div>
-          <button className="close-btn" onClick={onClose}><X size={18} /></button>
-        </div>
 
-        {/* Navigation Tabs */}
-        <div style={{
-          display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px',
-          background: 'var(--bg)', gap: '6px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center'
-        }}>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {[
-              { id: 'orders', label: 'Order History', icon: ShoppingBag, count: orders.length },
-              { id: 'profile', label: 'My Info & Address', icon: Edit3, count: '' },
-              { id: 'loyalty', label: 'Loyalty Rewards', icon: Gift, count: `${loyaltyCount}/8` },
-              { id: 'vouchers', label: 'My Vouchers', icon: Tag, count: '3' },
-              { id: 'reviews', label: 'Reviews & Complaints', icon: MessageSquare, count: '' },
-            ].map(t => {
-              const Icon = t.icon;
-              const isActive = activeTab === t.id;
+          <div className="dashboard-tabs" style={{ padding: '16px 20px 0' }}>
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
               return (
                 <button
-                  key={t.id}
-                  onClick={() => { setActiveTab(t.id); setAuthMode(currentUser ? 'none' : 'login'); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '12px 10px', borderBottom: isActive ? '3px solid var(--red)' : '3px solid transparent',
-                    fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--red)' : 'var(--text2)',
-                    fontSize: '0.82rem', background: 'none', cursor: 'pointer'
-                  }}
+                  key={tab.id}
+                  type="button"
+                  className={`dashboard-tab ${activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
                 >
-                  <Icon size={15} />
-                  <span>{t.label}</span>
-                  {t.count && <span className="cat-badge" style={{ background: isActive ? 'var(--red-light)' : 'var(--border)' }}>{t.count}</span>}
+                  <Icon size={16} /> {tab.label}
                 </button>
               );
             })}
+            {currentUser ? (
+              <button className="dashboard-tab" type="button" onClick={handleLogout}>
+                <LogOut size={16} /> Logout
+              </button>
+            ) : (
+              <button className="dashboard-tab" type="button" onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}>
+                <User size={16} /> Login
+              </button>
+            )}
           </div>
 
-          {currentUser ? (
-            <button
-              onClick={handleLogout}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--red)', cursor: 'pointer', padding: '6px' }}
-            >
-              <LogOut size={14} /> Logout
-            </button>
-          ) : (
-            <button
-              onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}
-              style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--red)', cursor: 'pointer', padding: '6px' }}
-            >
-              {authMode !== 'none' ? '← Back' : 'Login'}
-            </button>
-          )}
-        </div>
+          <div className="modal-body customer-portal-body">
+            {authMode !== 'none' ? (
+              <AuthPanel
+                authMode={authMode}
+                authForm={authForm}
+                authError={authError}
+                setAuthMode={setAuthMode}
+                setAuthForm={setAuthForm}
+                onSubmit={handleAuthSubmit}
+              />
+            ) : (
+              <>
+                {activeTab === 'home' && (
+                  <div className="for-you-grid">
+                    <section className="dashboard-card">
+                      <h4>Because you loved the Peri-Peri</h4>
+                      <div className="recommendation-rail">
+                        {['Peri-Peri Wings', 'Club Max Burger', 'Boneless Banquet', 'Chilli Cheese Bites', 'Apple Pie'].map((name, index) => (
+                          <article key={name} className="recommendation-card" style={{ animationDelay: `${index * 80}ms` }}>
+                            <h4>{name}</h4>
+                            <p className="cart-line-meta">Chef-picked for tonight</p>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
 
-        {/* AUTH MODAL VIEW (If Login/Register Clicked) */}
-        {authMode !== 'none' ? (
-          <div className="modal-body" style={{ padding: '24px' }}>
-            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 800, marginBottom: '14px' }}>
-              {authMode === 'login' ? '🔑 Login to Customer Account' : '📝 Create New Customer Account'}
-            </h4>
+                    <aside className="dashboard-card">
+                      <div className="promo-countdown">
+                        <Sparkles size={20} />
+                        <p>Direct order deal ends in</p>
+                        <strong>02:14:33</strong>
+                      </div>
+                      <h4 style={{ marginTop: 16 }}>Loyalty progress</h4>
+                      <div className="card-meta">
+                        {Array.from({ length: 8 }).map((_, index) => (
+                          <span key={index} className={index < loyaltyCount ? 'gold-text' : ''}>
+                            {index < loyaltyCount ? <Check size={13} /> : index + 1}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="cart-line-meta">Just {ordersNeeded} more order{ordersNeeded === 1 ? '' : 's'} until your next reward.</p>
+                    </aside>
 
-            {authError && <p style={{ color: 'var(--red)', fontSize: '0.82rem', marginBottom: '12px' }}>{authError}</p>}
-
-            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {authMode === 'register' && (
-                <div className="input-group"><User size={16} /><input placeholder="Full Name" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} /></div>
-              )}
-              <div className="input-group"><Mail size={16} /><input type="email" placeholder="Email Address" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} /></div>
-              <div className="input-group"><Lock size={16} /><input type="password" placeholder="Password" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} /></div>
-
-              {authMode === 'register' && (
-                <>
-                  <div className="input-group"><Phone size={16} /><input placeholder="Phone Number" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} /></div>
-                  <div className="input-group"><MapPin size={16} /><input placeholder="Street Address" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} /></div>
-                  <div className="input-group"><MapPin size={16} /><input placeholder="Postcode (e.g. WD24 6RU)" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value })} /></div>
-                  <label className="consent-row">
-                    <input
-                      type="checkbox"
-                      checked={authForm.consentAccepted}
-                      onChange={(e) => setAuthForm({ ...authForm, consentAccepted: e.target.checked })}
-                    />
-                    <span>I agree to the Privacy Policy and Terms.</span>
-                  </label>
-                </>
-              )}
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                <button type="submit" className="btn-submit-modal">
-                  {authMode === 'login' ? 'Login' : 'Register Account'}
-                </button>
-                <button type="button" className="btn-back" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
-                  {authMode === 'login' ? 'Need an account? Register' : 'Have an account? Login'}
-                </button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          <div className="modal-body" style={{ minHeight: '340px', maxHeight: '62vh', overflowY: 'auto' }}>
-            
-            {/* PROFILE / EDIT INFORMATION TAB */}
-            {activeTab === 'profile' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', fontWeight: 800 }}>
-                    ⚙️ Personal Details &amp; Default Delivery Address
-                  </h4>
-                  <button
-                    onClick={() => setIsEditingProfile(!isEditingProfile)}
-                    className="btn-add-item"
-                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                  >
-                    <Edit3 size={14} /> {isEditingProfile ? 'Cancel Editing' : 'Edit Information'}
-                  </button>
-                </div>
-
-                {!isEditingProfile ? (
-                  <div style={{ background: 'var(--bg)', padding: '20px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <p style={{ fontSize: '0.9rem' }}><strong>Full Name:</strong> {currentUser?.name}</p>
-                    <p style={{ fontSize: '0.9rem' }}><strong>Email Address:</strong> {currentUser?.email}</p>
-                    <p style={{ fontSize: '0.9rem' }}><strong>Phone Number:</strong> {currentUser?.phone}</p>
-                    <p style={{ fontSize: '0.9rem' }}><strong>Default Address:</strong> {currentUser?.address}</p>
-                    <p style={{ fontSize: '0.9rem' }}><strong>Postcode:</strong> {currentUser?.postcode}</p>
+                    <section className="dashboard-card" style={{ gridColumn: '1 / -1' }}>
+                      <h4>Order again</h4>
+                      {recentOrders.length === 0 ? (
+                        <p className="cart-line-meta">Your repeat-order shortcuts will appear here after checkout.</p>
+                      ) : (
+                        <div className="order-again-rail">
+                          {recentOrders.map((order, index) => (
+                            <OrderAgainCard
+                              key={order.id || order.orderNumber || index}
+                              order={order}
+                              onReorder={onReorder}
+                              onPrintReceipt={onPrintReceipt}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
                   </div>
-                ) : (
-                  <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Full Name</label>
-                      <div className="input-group"><User size={16} /><input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} /></div>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Phone Number</label>
-                      <div className="input-group"><Phone size={16} /><input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} /></div>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Street Address</label>
-                      <div className="input-group"><MapPin size={16} /><input value={profileForm.address} onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })} /></div>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: '4px' }}>Postcode</label>
-                      <div className="input-group"><MapPin size={16} /><input value={profileForm.postcode} onChange={(e) => setProfileForm({ ...profileForm, postcode: e.target.value.toUpperCase() })} /></div>
-                    </div>
-
-                    <button type="submit" className="btn-submit-modal" style={{ marginTop: '10px' }}>
-                      <Save size={16} /> Save Changes
-                    </button>
-                  </form>
                 )}
 
-                <div className="danger-zone">
-                  <h5>Account deletion</h5>
-                  <p>Delete your customer login and anonymise retained order records.</p>
-                  <button type="button" className="btn-soft-danger" onClick={handleDeleteAccount}>
-                    Delete My Account
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ORDERS TAB */}
-            {activeTab === 'orders' && (
-              <div>
-                {orders.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text3)' }}>
-                    <ShoppingBag size={42} strokeWidth={1} style={{ marginBottom: '10px' }} />
-                    <h4>No previous orders yet</h4>
-                    <p style={{ fontSize: '0.82rem' }}>Order your favourite chicken today to unlock rewards!</p>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {orders.map((ord, i) => {
-                      const canCancel = ord.orderStatus === 'Placed' || ord.orderStatus === 'Preparing';
-                      return (
-                        <div key={ord.id || i} style={{
-                          background: 'var(--bg)', borderRadius: 'var(--radius-sm)',
-                          padding: '16px', border: '1px solid var(--border)',
-                          display: 'flex', flexDirection: 'column', gap: '10px'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                            <div>
-                              <span style={{ fontWeight: 800, fontSize: '0.98rem' }}>Order #{ord.orderNumber}</span>
-                              <span style={{ fontSize: '0.78rem', color: 'var(--text3)', marginLeft: '10px', fontWeight: 600 }}>
-                                🕒 {ord.orderTime || (ord.createdAt ? new Date(ord.createdAt).toLocaleString('en-GB') : 'Today')}
-                              </span>
-                            </div>
-                            <span className={`status-badge status-${(ord.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>
-                              {ord.orderStatus || 'Completed'}
-                            </span>
-                          </div>
-
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text2)', background: '#fff', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                            {ord.items && ord.items.map((it, idx) => (
-                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                                <span>{it.quantity}x {getOrderItemName(it)}</span>
-                                <span style={{ fontWeight: 700 }}>£{(getOrderItemUnitPrice(it) * it.quantity).toFixed(2)}</span>
-                              </div>
-                            ))}
-                            {ord.cancellationReason && (
-                              <p style={{ color: 'var(--red)', fontSize: '0.78rem', marginTop: '6px', fontWeight: 700 }}>
-                                Cancelled: {ord.cancellationReason}
-                              </p>
-                            )}
-                          </div>
-
-                          <div style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            borderTop: '1px solid var(--border)', paddingTop: '10px', marginTop: '4px'
-                          }}>
-                            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.1rem', color: 'var(--red)' }}>
-                              Total: £{ord.total?.toFixed(2) || '0.00'}
-                            </span>
-
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                              {canCancel && (
-                                <button
-                                  onClick={() => setCancelModalOrder(ord)}
-                                  style={{
-                                    padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                                    background: '#FEF2F2', color: 'var(--red)', border: '1px solid #FEE2E2',
-                                    fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer'
-                                  }}
-                                >
-                                  Cancel Order
-                                </button>
-                              )}
-
-                              <button
-                                onClick={() => onPrintReceipt(ord)}
-                                className="btn-qty"
-                                title="Print Receipt"
-                                style={{ width: 'auto', padding: '6px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', gap: 4 }}
-                              >
-                                <Printer size={14} /> Receipt
-                              </button>
-
-                              <button
-                                onClick={() => onReorder(ord)}
-                                className="btn-add-item"
-                                style={{ padding: '6px 14px', fontSize: '0.78rem' }}
-                              >
-                                <RotateCcw size={14} /> Reorder
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                {activeTab === 'orders' && (
+                  <OrdersPanel
+                    orders={orders}
+                    onReorder={onReorder}
+                    onPrintReceipt={onPrintReceipt}
+                    onCancel={(orderToCancel) => setCancelModalOrder(orderToCancel)}
+                  />
                 )}
-              </div>
+
+                {activeTab === 'profile' && (
+                  <ProfilePanel
+                    currentUser={currentUser}
+                    profileForm={profileForm}
+                    setProfileForm={setProfileForm}
+                    isEditingProfile={isEditingProfile}
+                    setIsEditingProfile={setIsEditingProfile}
+                    onSave={handleSaveProfile}
+                    onDelete={handleDeleteAccount}
+                  />
+                )}
+
+                {activeTab === 'reviews' && <ReviewsManager isAdmin={false} showToast={showToast} />}
+              </>
             )}
-
-            {/* LOYALTY TAB */}
-            {activeTab === 'loyalty' && (
-              <div>
-                <div style={{
-                  background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)',
-                  borderRadius: 'var(--radius)', padding: '20px', border: '1px solid #FDE2E2',
-                  marginBottom: '20px', textAlign: 'center'
-                }}>
-                  <Sparkles size={28} color="var(--amber)" style={{ marginBottom: '6px' }} />
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 900 }}>RFC Loyalty Stamps</h4>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '4px' }}>
-                    Complete 8 orders to earn a <strong>10% OFF Voucher</strong> on your next order!
-                  </p>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', margin: '20px 0' }}>
-                    {Array.from({ length: 8 }).map((_, i) => {
-                      const isFilled = i < loyaltyCount;
-                      return (
-                        <div key={i} style={{
-                          aspectRatio: '1', borderRadius: '12px',
-                          background: isFilled ? 'var(--red)' : '#fff',
-                          border: isFilled ? 'none' : '2px dashed var(--border)',
-                          color: isFilled ? '#fff' : 'var(--text3)',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 800, fontSize: '0.85rem', boxShadow: isFilled ? 'var(--shadow-red)' : 'none'
-                        }}>
-                          {isFilled ? <Check size={20} /> : <span>#{i + 1}</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--red)' }}>
-                    Just {ordersNeeded} more order{ordersNeeded === 1 ? '' : 's'} until your reward.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* VOUCHERS TAB */}
-            {activeTab === 'vouchers' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {[
-                  { code: 'FIRST10', title: '10% OFF First Order', desc: 'Valid for new customers. No minimum spend.' },
-                  { code: 'OVER25', title: '10% OFF Orders over £25', desc: 'Valid on delivery & collection orders over £25.' },
-                  { code: 'RFC10', title: '10% OFF Special Deal', desc: 'Exclusive offer for direct website orders.' },
-                ].map((v, i) => (
-                  <div key={i} className="voucher-card" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <span className="voucher-code">{v.code}</span>
-                      <h5 style={{ fontWeight: 800, fontSize: '0.9rem', marginTop: '2px' }}>{v.title}</h5>
-                      <p className="voucher-desc">{v.desc}</p>
-                    </div>
-                    <button
-                      className="copy-btn"
-                      onClick={() => {
-                        navigator.clipboard.writeText(v.code).catch(() => {});
-                        showToast(`Voucher ${v.code} copied!`);
-                      }}
-                    >
-                      Copy Code
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* REVIEWS & COMPLAINTS TAB */}
-            {activeTab === 'reviews' && (
-              <ReviewsManager isAdmin={false} showToast={showToast} />
-            )}
-
           </div>
-        )}
 
-        {/* Footer */}
-        <div className="modal-footer" style={{ justifyContent: 'center' }}>
-          <button className="btn-back" onClick={onClose} style={{ width: '100%', justifyContent: 'center' }}>
-            Close Customer Portal
-          </button>
-        </div>
+          <div className="modal-footer">
+            <button className="btn-back" type="button" onClick={onClose}>Close</button>
+          </div>
+        </motion.div>
+
+        <CancelOrderModal
+          isOpen={Boolean(cancelModalOrder)}
+          onClose={() => setCancelModalOrder(null)}
+          order={cancelModalOrder}
+          onConfirmCancel={(orderId, reason) => {
+            onCancelOrder?.(orderId, reason);
+            setCancelModalOrder(null);
+          }}
+        />
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function AuthPanel({ authMode, authForm, authError, setAuthMode, setAuthForm, onSubmit }) {
+  return (
+    <form className="dashboard-card" onSubmit={onSubmit}>
+      <h4>{authMode === 'login' ? 'Login to customer account' : 'Create customer account'}</h4>
+      {authError && <p className="form-error">{authError}</p>}
+
+      {authMode === 'register' && (
+        <label className="input-group">
+          <User size={16} />
+          <input placeholder="Full name" value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} required />
+        </label>
+      )}
+      <label className="input-group">
+        <Mail size={16} />
+        <input type="email" placeholder="Email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} required />
+      </label>
+      <label className="input-group">
+        <User size={16} />
+        <input type="password" placeholder="Password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} required />
+      </label>
+
+      {authMode === 'register' && (
+        <>
+          <label className="input-group">
+            <Phone size={16} />
+            <input placeholder="Phone" value={authForm.phone} onChange={(event) => setAuthForm({ ...authForm, phone: event.target.value })} />
+          </label>
+          <label className="input-group">
+            <MapPin size={16} />
+            <input placeholder="Street address" value={authForm.address} onChange={(event) => setAuthForm({ ...authForm, address: event.target.value })} />
+          </label>
+          <label className="input-group">
+            <MapPin size={16} />
+            <input placeholder="Postcode" value={authForm.postcode} onChange={(event) => setAuthForm({ ...authForm, postcode: event.target.value.toUpperCase() })} />
+          </label>
+          <label className="consent-row">
+            <input type="checkbox" checked={authForm.consentAccepted} onChange={(event) => setAuthForm({ ...authForm, consentAccepted: event.target.checked })} />
+            <span>I agree to the Privacy Policy and Terms.</span>
+          </label>
+        </>
+      )}
+
+      <div className="modal-footer" style={{ paddingLeft: 0, paddingRight: 0, paddingBottom: 0 }}>
+        <button className="btn-submit-modal" type="submit">{authMode === 'login' ? 'Login' : 'Create account'}</button>
+        <button className="btn-back" type="button" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+          {authMode === 'login' ? 'Register' : 'Login'}
+        </button>
       </div>
+    </form>
+  );
+}
 
-      {/* CANCEL ORDER MODAL */}
-      <CancelOrderModal
-        isOpen={!!cancelModalOrder}
-        onClose={() => setCancelModalOrder(null)}
-        order={cancelModalOrder}
-        onConfirmCancel={(orderId, reason) => {
-          if (onCancelOrder) onCancelOrder(orderId, reason);
-        }}
-      />
+function OrderAgainCard({ order, onReorder, onPrintReceipt }) {
+  return (
+    <article className="order-again-card">
+      <div className="order-collage">RFC</div>
+      <h4>Order #{order.orderNumber || 'recent'}</h4>
+      <p className="cart-line-meta">{order.items?.slice(0, 3).map(getOrderItemName).join(', ') || 'RFC favourites'}</p>
+      <div className="modal-footer" style={{ padding: '12px 0 0' }}>
+        <button className="btn-add-item compact" type="button" onClick={() => onReorder(order)}>
+          <RotateCcw size={14} /> Reorder
+        </button>
+        <button className="btn-back" type="button" onClick={() => onPrintReceipt(order)}>
+          <Printer size={14} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function OrdersPanel({ orders, onReorder, onPrintReceipt, onCancel }) {
+  if (orders.length === 0) {
+    return (
+      <div className="empty-state">
+        <ShoppingBag size={44} />
+        <h3>No previous orders yet</h3>
+        <p>Your order history will appear here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="live-feed">
+      {orders.map((order, index) => {
+        const canCancel = order.orderStatus === 'Placed' || order.orderStatus === 'Preparing';
+        return (
+          <article key={order.id || index} className="dashboard-card">
+            <div className="receipt-header-row">
+              <div>
+                <h4>Order #{order.orderNumber}</h4>
+                <p className="cart-line-meta">{order.orderTime || (order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB') : 'Today')}</p>
+              </div>
+              <span className={`status-badge status-${(order.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>
+                {order.orderStatus || 'Completed'}
+              </span>
+            </div>
+            {order.items?.map((item, itemIndex) => (
+              <div key={`${item.id || getOrderItemName(item)}-${itemIndex}`} className="receipt-row">
+                <span>{item.quantity}x {getOrderItemName(item)}</span>
+                <span>GBP {(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="receipt-total-row">
+              <span>Total</span>
+              <span>GBP {order.total?.toFixed(2) || '0.00'}</span>
+            </div>
+            <div className="receipt-actions" style={{ marginTop: 12 }}>
+              {canCancel && <button className="btn-soft-danger" type="button" onClick={() => onCancel(order)}>Cancel</button>}
+              <button className="btn-back" type="button" onClick={() => onPrintReceipt(order)}><Printer size={14} /> Receipt</button>
+              <button className="btn-add-item compact" type="button" onClick={() => onReorder(order)}><RotateCcw size={14} /> Reorder</button>
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
+
+function ProfilePanel({ currentUser, profileForm, setProfileForm, isEditingProfile, setIsEditingProfile, onSave, onDelete }) {
+  if (!currentUser) {
+    return <p className="empty-state">Login to save your address and reorder faster.</p>;
+  }
+
+  return (
+    <section className="dashboard-card">
+      <div className="receipt-header-row">
+        <h4>Saved delivery profile</h4>
+        <button className="btn-add-item compact" type="button" onClick={() => setIsEditingProfile(!isEditingProfile)}>
+          <Edit3 size={14} /> {isEditingProfile ? 'Cancel' : 'Edit'}
+        </button>
+      </div>
+
+      {!isEditingProfile ? (
+        <div className="profile-detail-card">
+          <p><strong>Name:</strong> {currentUser.name}</p>
+          <p><strong>Email:</strong> {currentUser.email}</p>
+          <p><strong>Phone:</strong> {currentUser.phone || 'Not saved'}</p>
+          <p><strong>Address:</strong> {currentUser.address || 'Not saved'}</p>
+          <p><strong>Postcode:</strong> {currentUser.postcode || 'Not saved'}</p>
+        </div>
+      ) : (
+        <form onSubmit={onSave}>
+          {[
+            ['name', 'Full name', User],
+            ['phone', 'Phone', Phone],
+            ['address', 'Street address', MapPin],
+            ['postcode', 'Postcode', MapPin]
+          ].map(([field, label, Icon]) => (
+            <label key={field} className="input-group" style={{ marginBottom: 10 }}>
+              <Icon size={16} />
+              <input value={profileForm[field]} placeholder={label} onChange={(event) => setProfileForm({ ...profileForm, [field]: field === 'postcode' ? event.target.value.toUpperCase() : event.target.value })} />
+            </label>
+          ))}
+          <button className="btn-submit-modal" type="submit"><Save size={16} /> Save changes</button>
+        </form>
+      )}
+
+      <div className="danger-zone">
+        <h5>Account deletion</h5>
+        <p>Delete your customer login and anonymise retained order records.</p>
+        <button className="btn-soft-danger" type="button" onClick={onDelete}>Delete My Account</button>
+      </div>
+    </section>
+  );
+}
+
+CustomerDashboard.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  orders: PropTypes.array,
+  onReorder: PropTypes.func.isRequired,
+  onPrintReceipt: PropTypes.func.isRequired,
+  onCancelOrder: PropTypes.func,
+  showToast: PropTypes.func
+};
+
+AuthPanel.propTypes = {
+  authMode: PropTypes.oneOf(['login', 'register']).isRequired,
+  authForm: PropTypes.object.isRequired,
+  authError: PropTypes.string,
+  setAuthMode: PropTypes.func.isRequired,
+  setAuthForm: PropTypes.func.isRequired,
+  onSubmit: PropTypes.func.isRequired
+};
+
+OrderAgainCard.propTypes = {
+  order: PropTypes.object.isRequired,
+  onReorder: PropTypes.func.isRequired,
+  onPrintReceipt: PropTypes.func.isRequired
+};
+
+OrdersPanel.propTypes = {
+  orders: PropTypes.array.isRequired,
+  onReorder: PropTypes.func.isRequired,
+  onPrintReceipt: PropTypes.func.isRequired,
+  onCancel: PropTypes.func.isRequired
+};
+
+ProfilePanel.propTypes = {
+  currentUser: PropTypes.object,
+  profileForm: PropTypes.object.isRequired,
+  setProfileForm: PropTypes.func.isRequired,
+  isEditingProfile: PropTypes.bool.isRequired,
+  setIsEditingProfile: PropTypes.func.isRequired,
+  onSave: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired
+};

@@ -4,6 +4,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const CSRF_COOKIE = 'rfc_csrf';
 const CSRF_HEADER = 'X-CSRF-Token';
+const ORDER_ACCESS_HEADER = 'X-Order-Access-Token';
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const readCookie = (name) => {
@@ -101,14 +102,23 @@ export const placeOrder = async (orderPayload) => {
   });
 };
 
-export const getOrder = async (orderIdOrNumber) => {
-  return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}`);
+const orderAccessOptions = (accessToken) => (
+  accessToken ? { headers: { [ORDER_ACCESS_HEADER]: accessToken } } : {}
+);
+
+export const getOrder = async (orderIdOrNumber, accessToken) => {
+  return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}`, orderAccessOptions(accessToken));
 };
 
-export const cancelOrder = async (orderIdOrNumber, reason) => {
+export const refreshOrderEta = async (orderIdOrNumber, accessToken) => {
+  return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}/eta`, orderAccessOptions(accessToken));
+};
+
+export const cancelOrder = async (orderIdOrNumber, reason, accessToken) => {
   return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}/cancel`, {
     method: 'PUT',
-    body: JSON.stringify({ reason })
+    headers: orderAccessOptions(accessToken).headers,
+    body: JSON.stringify({ reason, accessToken })
   });
 };
 

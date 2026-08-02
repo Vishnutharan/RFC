@@ -33,6 +33,9 @@ export const useOrders = (showToast) => {
   }, [persistOrder, showToast]);
 
   const cancelExistingOrder = useCallback(async (orderIdOrNumber, cancellationReason) => {
+    const matchedOrder = userOrders.find((order) => order.id === orderIdOrNumber || order.orderNumber === orderIdOrNumber) ||
+      (activeOrder && (activeOrder.id === orderIdOrNumber || activeOrder.orderNumber === orderIdOrNumber) ? activeOrder : null);
+
     setUserOrders((prev) => prev.map((order) => {
       if (order.id === orderIdOrNumber || order.orderNumber === orderIdOrNumber) {
         return { ...order, orderStatus: 'Cancelled', cancellationReason };
@@ -45,9 +48,29 @@ export const useOrders = (showToast) => {
       return { ...prev, orderStatus: 'Cancelled', cancellationReason };
     });
 
-    await cancelOrder(orderIdOrNumber, cancellationReason);
+    const cancelledOrder = await cancelOrder(orderIdOrNumber, cancellationReason, matchedOrder?.accessToken);
+    const orderWithToken = {
+      ...(cancelledOrder || {}),
+      accessToken: cancelledOrder?.accessToken || matchedOrder?.accessToken
+    };
+
+    setUserOrders((prev) => {
+      const next = prev.map((order) => (
+        order.id === orderIdOrNumber || order.orderNumber === orderIdOrNumber
+          ? { ...order, ...orderWithToken }
+          : order
+      ));
+      localStorage.setItem(RECENT_ORDERS_KEY, JSON.stringify(next));
+      return next;
+    });
+
+    setActiveOrder((prev) => {
+      if (!prev || (prev.id !== orderIdOrNumber && prev.orderNumber !== orderIdOrNumber)) return prev;
+      return { ...prev, ...orderWithToken };
+    });
+
     showToast?.('Order cancelled successfully.', 'info');
-  }, [showToast]);
+  }, [activeOrder, showToast, userOrders]);
 
   return {
     userOrders,

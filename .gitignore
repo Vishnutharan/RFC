@@ -13,6 +13,9 @@ yarn-error.log*
 # .NET / C#
 backend/bin/
 backend/obj/
+backend/build-check/
+backend.Tests/bin/
+backend.Tests/obj/
 *.user
 *.suo
 .vs/

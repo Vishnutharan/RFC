@@ -1,6 +1,7 @@
 namespace RFC.Api.Models;
 
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 public class OrderItem
 {
@@ -114,6 +115,10 @@ public class Order
     [MaxLength(80)]
     public string? DriverId { get; set; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [MaxLength(256)]
+    public string? AccessToken { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -130,4 +135,7 @@ public class CancelOrderRequest
     [MinLength(3)]
     [MaxLength(500)]
     public string Reason { get; set; } = string.Empty;
+
+    [MaxLength(256)]
+    public string? AccessToken { get; set; }
 }

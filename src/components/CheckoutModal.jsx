@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { checkDeliveryEligibility } from '../utils/deliveryRadius';
 import { getCurrentUser } from '../services/customerAuth';
 import { createPaymentIntent } from '../services/api';
@@ -68,11 +69,11 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
   }, [formData.postcode, orderMode]);
 
   const subtotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    () => cartItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0),
     [cartItems]
   );
-  const discount = appliedVoucher ? subtotal * appliedVoucher.discountPercent / 100 : 0;
-  const deliveryFee = orderMode === 'delivery' && subtotal < 25 ? 2.50 : 0;
+  const discount = appliedVoucher ? (subtotal * appliedVoucher.discountPercent) / 100 : 0;
+  const deliveryFee = orderMode === 'delivery' && subtotal < 25 ? 2.5 : 0;
   const total = subtotal - discount + deliveryFee;
 
   const isValid = useMemo(() => {
@@ -161,7 +162,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
         : null;
 
       await onOrderSuccess(buildOrderPayload(stripePaymentIntentId));
-      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      confetti({ particleCount: 160, spread: 72, origin: { y: 0.62 }, colors: ['#E8A93F', '#4ADE80', '#F3F4F6'] });
     } catch (error) {
       setSubmitError(error.message || 'Order could not be completed.');
     } finally {
@@ -169,114 +170,181 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
     }
   };
 
+  const stripeStyle = {
+    style: {
+      base: {
+        color: '#F3F4F6',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '16px',
+        '::placeholder': { color: '#737B8C' }
+      },
+      invalid: { color: '#FFB4B1' }
+    },
+    hidePostalCode: true
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card checkout-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <h3><Lock size={18} /> Checkout</h3>
-            <p className="modal-subtitle">
-              {orderMode === 'delivery' ? 'Delivery order in the Watford zone' : 'Store collection'}
-            </p>
-          </div>
-          <button className="close-btn" onClick={onClose} aria-label="Close checkout">
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="modal-body checkout-body">
-          {submitError && <div className="form-error">{submitError}</div>}
-
-          <section className="checkout-section">
-            <h4>Customer Contact Details</h4>
-            <div className="checkout-grid">
-              <div className="input-group"><User size={16} /><input name="name" placeholder="Full Name *" value={formData.name} onChange={handleChange} required /></div>
-              <div className="input-group"><Mail size={16} /><input name="email" type="email" placeholder="Email Address *" value={formData.email} onChange={handleChange} required /></div>
-              <div className="input-group"><Phone size={16} /><input name="phone" type="tel" placeholder="Phone Number *" value={formData.phone} onChange={handleChange} required /></div>
-            </div>
-          </section>
-
-          <section className="checkout-section">
-            <h4>{orderMode === 'delivery' ? 'Delivery Address' : 'Collection Details'}</h4>
-            {orderMode === 'delivery' ? (
-              <>
-                <div className="checkout-address-grid">
-                  <div className="input-group"><MapPin size={16} /><input name="address" placeholder="Street Address *" value={formData.address} onChange={handleChange} required /></div>
-                  <div className="input-group"><MapPin size={16} /><input name="postcode" placeholder="Postcode *" value={formData.postcode} onChange={handleChange} required /></div>
-                </div>
-                <div className={`checkout-radius ${radiusCheck.isEligible ? 'ok' : 'error'}`}>
-                  {radiusCheck.isEligible ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
-                  <span>{radiusCheck.reason}</span>
-                </div>
-                <div className="input-group"><Truck size={16} /><input name="notes" placeholder="Delivery notes for driver" value={formData.notes} onChange={handleChange} /></div>
-              </>
-            ) : (
-              <div className="collection-panel">
-                <Store size={18} />
-                <div>
-                  <strong>RFC Watford, 119 Courtlands Drive, Watford WD17 4HZ</strong>
-                  <span>Ready for pickup in 15-20 minutes</span>
-                </div>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div className="modal-overlay" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div
+            className="modal-card checkout-card"
+            onClick={(event) => event.stopPropagation()}
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 28 }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3><Lock size={19} /> Checkout</h3>
+                <p className="modal-subtitle">
+                  {orderMode === 'delivery' ? 'Delivery in the Watford zone' : 'Collection from Courtlands Drive'}
+                </p>
               </div>
-            )}
-          </section>
-
-          <section className="checkout-section">
-            <h4>Payment Method</h4>
-            <div className="payment-options">
-              {[
-                { id: 'card', icon: <CreditCard size={18} />, label: 'Card' },
-                { id: 'cash', icon: <Banknote size={18} />, label: 'Cash' }
-              ].map((method) => (
-                <label key={method.id} className={`payment-card ${formData.paymentMethod === method.id ? 'selected' : ''}`}>
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value={method.id}
-                    checked={formData.paymentMethod === method.id}
-                    onChange={handleChange}
-                  />
-                  {method.icon}
-                  <span>{method.label}</span>
-                </label>
-              ))}
+              <button className="close-btn" type="button" onClick={onClose} aria-label="Close checkout">
+                <X size={18} />
+              </button>
             </div>
 
-            {formData.paymentMethod === 'card' && (
-              <div className="stripe-card-panel">
-                {!stripeConfigured && (
-                  <div className="form-error">Stripe publishable key is missing. Use cash or configure VITE_STRIPE_PUBLISHABLE_KEY.</div>
+            <form onSubmit={handleSubmit} className="modal-body checkout-body">
+              <div className="checkout-stepper" aria-label="Checkout progress">
+                {['Cart', 'Details', 'Payment', 'Confirm'].map((step, index) => (
+                  <span key={step} className={`checkout-step ${index <= 2 ? 'active' : ''}`}>{step}</span>
+                ))}
+              </div>
+
+              {submitError && <div className="form-error">{submitError}</div>}
+
+              <section className="checkout-section">
+                <h4>Customer details</h4>
+                <div className="checkout-grid">
+                  <label className="input-group">
+                    <User size={16} />
+                    <input name="name" placeholder="Full name" value={formData.name} onChange={handleChange} required />
+                  </label>
+                  <label className="input-group">
+                    <Mail size={16} />
+                    <input name="email" type="email" placeholder="Email" value={formData.email} onChange={handleChange} required />
+                  </label>
+                  <label className="input-group">
+                    <Phone size={16} />
+                    <input name="phone" type="tel" placeholder="Phone" value={formData.phone} onChange={handleChange} required />
+                  </label>
+                </div>
+              </section>
+
+              <section className="checkout-section">
+                <h4>{orderMode === 'delivery' ? 'Delivery address' : 'Collection details'}</h4>
+                {orderMode === 'delivery' ? (
+                  <>
+                    <div className="checkout-address-grid">
+                      <label className="input-group">
+                        <MapPin size={16} />
+                        <input name="address" placeholder="Street address" value={formData.address} onChange={handleChange} required />
+                      </label>
+                      <label className="input-group">
+                        <MapPin size={16} />
+                        <input name="postcode" placeholder="Postcode" value={formData.postcode} onChange={handleChange} required />
+                      </label>
+                    </div>
+                    <div className={`checkout-radius ${radiusCheck.isEligible ? 'ok' : 'error'}`}>
+                      {radiusCheck.isEligible ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+                      <span>{radiusCheck.reason}</span>
+                    </div>
+                    <label className="input-group">
+                      <Truck size={16} />
+                      <input name="notes" placeholder="Delivery notes" value={formData.notes} onChange={handleChange} />
+                    </label>
+                  </>
+                ) : (
+                  <div className="collection-panel">
+                    <Store size={19} />
+                    <div>
+                      <strong>RFC Watford, 119 Courtlands Drive, Watford WD17 4HZ</strong>
+                      <span>Ready in 15 to 20 minutes</span>
+                    </div>
+                  </div>
                 )}
-                <CardElement options={{ hidePostalCode: true }} />
-              </div>
-            )}
-          </section>
+              </section>
 
-          <section className="checkout-summary">
-            <h4>Order Basket Summary ({cartItems.length} items)</h4>
-            {cartItems.map((item, index) => (
-              <div key={`${item.id}-${index}`} className="summary-row">
-                <span>{item.quantity}x {item.name}</span>
-                <span>GBP {(item.price * item.quantity).toFixed(2)}</span>
-              </div>
-            ))}
-            <div className="summary-divider" />
-            <div className="summary-row"><span>Subtotal</span><span>GBP {subtotal.toFixed(2)}</span></div>
-            {discount > 0 && <div className="summary-row discount"><span>Discount ({appliedVoucher?.code})</span><span>-GBP {discount.toFixed(2)}</span></div>}
-            <div className="summary-row"><span>Delivery Fee</span><span>{deliveryFee === 0 ? 'FREE' : `GBP ${deliveryFee.toFixed(2)}`}</span></div>
-            <div className="summary-total"><span>Total Amount</span><span>GBP {total.toFixed(2)}</span></div>
-          </section>
+              <section className="checkout-section">
+                <h4>Payment method</h4>
+                <div className="payment-options-grid">
+                  {[
+                    { id: 'card', icon: CreditCard, label: 'Card' },
+                    { id: 'cash', icon: Banknote, label: 'Cash' }
+                  ].map((method) => {
+                    const Icon = method.icon;
+                    return (
+                      <label key={method.id} className={`payment-card ${formData.paymentMethod === method.id ? 'selected' : ''}`}>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={method.id}
+                          checked={formData.paymentMethod === method.id}
+                          onChange={handleChange}
+                        />
+                        <Icon size={19} />
+                        <span>{method.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
 
-          <button type="submit" className="btn-submit-modal checkout-submit" disabled={!isValid || isSubmitting}>
-            {isSubmitting ? 'Processing...' : <><Lock size={18} /> Complete Order - GBP {total.toFixed(2)}</>}
-          </button>
-        </form>
-      </div>
-    </div>
+                {formData.paymentMethod === 'card' && (
+                  <div className="stripe-card-panel">
+                    {!stripeConfigured && (
+                      <div className="form-error">Stripe publishable key is missing. Choose cash or configure VITE_STRIPE_PUBLISHABLE_KEY.</div>
+                    )}
+                    <CardElement options={stripeStyle} />
+                  </div>
+                )}
+              </section>
+
+              <section className="checkout-summary">
+                <h4>Order summary</h4>
+                <div className="summary-thumbs">
+                  {cartItems.slice(0, 8).map((item, index) => (
+                    item.item?.imageUrl ? (
+                      <img key={`${item.id}-${index}`} className="summary-thumb" src={item.item.imageUrl} alt={item.name} loading="lazy" />
+                    ) : (
+                      <span key={`${item.id}-${index}`} className="summary-thumb cart-item-thumb-fallback">RFC</span>
+                    )
+                  ))}
+                </div>
+                {cartItems.map((item, index) => (
+                  <div key={`${item.id}-${index}`} className="summary-row">
+                    <span>{item.quantity}x {item.name}</span>
+                    <span>GBP {(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="summary-divider" />
+                <div className="summary-row"><span>Subtotal</span><span>GBP {subtotal.toFixed(2)}</span></div>
+                {discount > 0 && <div className="summary-row discount"><span>Discount ({appliedVoucher?.code})</span><span>-GBP {discount.toFixed(2)}</span></div>}
+                <div className="summary-row"><span>Delivery fee</span><span>{deliveryFee === 0 ? 'Free' : `GBP ${deliveryFee.toFixed(2)}`}</span></div>
+                <div className="summary-total"><span>Total</span><span>GBP {total.toFixed(2)}</span></div>
+              </section>
+
+              <button type="submit" className="btn-submit-modal checkout-submit" disabled={!isValid || isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <span className="button-spinner" /> Confirming payment
+                  </>
+                ) : (
+                  <>
+                    <Lock size={18} /> Place Order - GBP {total.toFixed(2)}
+                  </>
+                )}
+              </button>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
-CheckoutModal.propTypes = {
+const checkoutPropTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   cartItems: PropTypes.array,
@@ -285,7 +353,9 @@ CheckoutModal.propTypes = {
   onOrderSuccess: PropTypes.func.isRequired
 };
 
+CheckoutModal.propTypes = checkoutPropTypes;
+
 CheckoutForm.propTypes = {
-  ...CheckoutModal.propTypes,
+  ...checkoutPropTypes,
   stripeConfigured: PropTypes.bool.isRequired
 };

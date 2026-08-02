@@ -49,6 +49,11 @@ public class RfcDbContext : DbContext
             entity.Property(order => order.CustomerName).HasColumnName("customer_name").HasMaxLength(100).IsRequired();
             entity.Property(order => order.CustomerPhone).HasColumnName("customer_phone").HasMaxLength(50).IsRequired();
             entity.Property(order => order.CustomerEmail).HasColumnName("customer_email").HasMaxLength(120).IsRequired();
+            entity.Property(order => order.CustomerId).HasColumnName("customer_id").HasMaxLength(80);
+            entity.HasIndex(order => order.CustomerId);
+            entity.Property(order => order.OrderAccessTokenHash).HasColumnName("order_access_token_hash").HasMaxLength(128);
+            entity.HasIndex(order => order.OrderAccessTokenHash);
+            entity.Property(order => order.OrderAccessTokenExpiresAt).HasColumnName("order_access_token_expires_at");
             entity.Property(order => order.DeliveryAddress).HasColumnName("delivery_address").HasMaxLength(500);
             entity.Property(order => order.DeliveryPostcode).HasColumnName("delivery_postcode").HasMaxLength(20);
             entity.Property(order => order.DeliveryNotes).HasColumnName("delivery_notes").HasMaxLength(500);
@@ -163,6 +168,9 @@ public class DbOrder
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string CustomerEmail { get; set; } = string.Empty;
+    public string? CustomerId { get; set; }
+    public string? OrderAccessTokenHash { get; set; }
+    public DateTime? OrderAccessTokenExpiresAt { get; set; }
     public string DeliveryAddress { get; set; } = string.Empty;
     public string DeliveryPostcode { get; set; } = string.Empty;
     public string DeliveryNotes { get; set; } = string.Empty;

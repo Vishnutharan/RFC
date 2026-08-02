@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -7,7 +8,6 @@ using RFC.Api.Data;
 using RFC.Api.Models;
 using RFC.Api.Security;
 using RFC.Api.Services;
-using Stripe;
 
 namespace RFC.Api.Controllers;
 
@@ -26,10 +26,12 @@ public class OrdersController : ControllerBase
     };
 
     private readonly RfcDbContext? _db;
+    private readonly AuditService? _audit;
     private readonly OrderPricingService _pricing;
     private readonly GoogleMapsService _maps;
     private readonly NotificationService _notifications;
-    private readonly IConfiguration _configuration;
+    private readonly OrderAccessService _orderAccess;
+    private readonly IPaymentGateway _payments;
     private readonly ILogger<OrdersController> _logger;
 
     public OrdersController(
@@ -37,14 +39,17 @@ public class OrdersController : ControllerBase
         OrderPricingService pricing,
         GoogleMapsService maps,
         NotificationService notifications,
-        IConfiguration configuration,
+        OrderAccessService orderAccess,
+        IPaymentGateway payments,
         ILogger<OrdersController> logger)
     {
         _db = provider.GetService<RfcDbContext>();
+        _audit = provider.GetService<AuditService>();
         _pricing = pricing;
         _maps = maps;
         _notifications = notifications;
-        _configuration = configuration;
+        _orderAccess = orderAccess;
+        _payments = payments;
         _logger = logger;
     }
 
@@ -75,7 +80,10 @@ public class OrdersController : ControllerBase
             var pricedOrder = pricingResult.Order;
             if (pricedOrder.PaymentMethod == "card")
             {
-                var paymentCheck = await VerifyStripePaymentAsync(pricedOrder, cancellationToken);
+                var paymentCheck = await _payments.VerifyPaymentIntentAsync(
+                    pricedOrder.StripePaymentIntentId,
+                    pricedOrder.Total,
+                    cancellationToken);
                 if (!paymentCheck.IsValid)
                 {
                     return paymentCheck.IsServiceUnavailable
@@ -94,6 +102,7 @@ public class OrdersController : ControllerBase
             pricedOrder.OrderTime = string.IsNullOrWhiteSpace(pricedOrder.OrderTime)
                 ? now.ToString("dd MMM yyyy, HH:mm:ss")
                 : pricedOrder.OrderTime;
+            pricedOrder.AccessToken = OrderAccessService.CreateAccessToken();
 
             if (pricedOrder.OrderType == "delivery")
             {
@@ -114,7 +123,11 @@ public class OrdersController : ControllerBase
                 return BadRequest(new { message = stockCheck.Message });
             }
 
-            _db.Orders.Add(ToDbOrder(pricedOrder));
+            var dbOrder = ToDbOrder(pricedOrder);
+            dbOrder.CustomerId = GetAuthenticatedCustomerId();
+            dbOrder.OrderAccessTokenHash = OrderAccessService.HashAccessToken(pricedOrder.AccessToken);
+            dbOrder.OrderAccessTokenExpiresAt = now.Add(OrderAccessService.GuestAccessTokenLifetime);
+            _db.Orders.Add(dbOrder);
             await _db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
@@ -139,11 +152,68 @@ public class OrdersController : ControllerBase
             var dbOrder = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(
                 o => o.Id == clean || o.OrderNumber == clean,
                 HttpContext.RequestAborted);
-            return dbOrder != null ? Ok(MapToOrderDto(dbOrder)) : NotFound(new { message = "Order not found" });
+            if (dbOrder == null) return NotFound(new { message = "Order not found" });
+
+            var accessToken = OrderAccessService.GetAccessToken(Request);
+            if (!_orderAccess.HasAccess(dbOrder, User, accessToken))
+            {
+                await _orderAccess.AuditDeniedAsync("OrderReadDenied", dbOrder, accessToken, "ownership proof failed");
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not allowed to access this order." });
+            }
+
+            return Ok(MapToOrderDto(dbOrder));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load order {OrderIdOrNumber}", idOrNumber);
+            return ServiceUnavailable();
+        }
+    }
+
+    [HttpGet("{idOrNumber}/eta")]
+    public async Task<IActionResult> RefreshEta(string idOrNumber)
+    {
+        if (_db == null) return ServiceUnavailable();
+        var cancellationToken = HttpContext.RequestAborted;
+
+        try
+        {
+            var cleanId = InputSanitizer.Clean(idOrNumber, 80);
+            var dbOrder = await _db.Orders.FirstOrDefaultAsync(
+                o => o.Id == cleanId || o.OrderNumber == cleanId,
+                cancellationToken);
+            if (dbOrder == null) return NotFound(new { message = "Order not found" });
+
+            var accessToken = OrderAccessService.GetAccessToken(Request);
+            if (!_orderAccess.HasAccess(dbOrder, User, accessToken))
+            {
+                await _orderAccess.AuditDeniedAsync("OrderEtaRefreshDenied", dbOrder, accessToken, "ownership proof failed");
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not allowed to access this order." });
+            }
+
+            if (dbOrder.OrderType == "delivery" &&
+                dbOrder.OrderStatus == "Out for Delivery" &&
+                dbOrder.DeliveryLat != null &&
+                dbOrder.DeliveryLng != null)
+            {
+                var eta = await _maps.GetEtaMinutesAsync(dbOrder.DeliveryLat.Value, dbOrder.DeliveryLng.Value, cancellationToken);
+                if (eta != null)
+                {
+                    dbOrder.EtaMinutes = eta;
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            return Ok(new
+            {
+                etaMinutes = dbOrder.EtaMinutes,
+                estimatedAt = DateTime.UtcNow,
+                isLiveDriverTracking = false
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh ETA for order {OrderIdOrNumber}", idOrNumber);
             return ServiceUnavailable();
         }
     }
@@ -162,11 +232,21 @@ public class OrdersController : ControllerBase
                 o => o.Id == cleanId || o.OrderNumber == cleanId,
                 cancellationToken);
             if (dbOrder == null) return NotFound(new { message = "Order not found" });
+
+            var accessToken = OrderAccessService.GetAccessToken(Request, request.AccessToken);
+            if (!_orderAccess.HasAccess(dbOrder, User, accessToken))
+            {
+                await _orderAccess.AuditDeniedAsync("OrderCancelDenied", dbOrder, accessToken, "ownership proof failed");
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not allowed to cancel this order." });
+            }
+
             if (!CustomerCancellableStatuses.Contains(dbOrder.OrderStatus))
             {
                 return Conflict(new { message = "This order can no longer be cancelled online." });
             }
 
+            var oldStatus = dbOrder.OrderStatus;
+            var oldPaymentStatus = dbOrder.PaymentStatus;
             if (dbOrder.PaymentMethod == "card" && dbOrder.PaymentStatus == "Paid")
             {
                 var refundCheck = await RefundStripePaymentAsync(dbOrder, cancellationToken);
@@ -184,6 +264,16 @@ public class OrdersController : ControllerBase
             await RestoreStockAsync(dbOrder);
             await _db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+
+            if (_audit != null)
+            {
+                await _audit.LogAsync(
+                    "CustomerCancelOrder",
+                    "Order",
+                    dbOrder.Id,
+                    new { orderStatus = oldStatus, paymentStatus = oldPaymentStatus },
+                    new { orderStatus = dbOrder.OrderStatus, paymentStatus = dbOrder.PaymentStatus, reason = dbOrder.CancellationReason });
+            }
 
             _notifications.SendCancellationEmailInBackground(dbOrder, dbOrder.CancellationReason);
             return Ok(MapToOrderDto(dbOrder));
@@ -389,67 +479,32 @@ public class OrdersController : ControllerBase
         }
     }
 
-    private async Task<PaymentCheck> VerifyStripePaymentAsync(Order order, CancellationToken cancellationToken)
+    private async Task<PaymentGatewayResult> RefundStripePaymentAsync(DbOrder order, CancellationToken cancellationToken)
     {
-        var secretKey = _configuration["Stripe:SecretKey"];
-        if (string.IsNullOrWhiteSpace(secretKey) || string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
+        var result = await _payments.RefundPaymentIntentAsync(order.StripePaymentIntentId, cancellationToken);
+        if (result.IsValid)
         {
-            return new PaymentCheck(false, true, "Card payment is temporarily unavailable.");
+            order.PaymentStatus = "Refunded";
+            return result;
         }
 
-        try
+        if (_audit != null)
         {
-            StripeConfiguration.ApiKey = secretKey;
-            var service = new PaymentIntentService();
-            var intent = await service.GetAsync(order.StripePaymentIntentId, requestOptions: null, cancellationToken: cancellationToken);
-            var expectedAmount = (long)Math.Round(order.Total * 100m, MidpointRounding.AwayFromZero);
-            if (intent.Status != "succeeded" ||
-                intent.Currency != "gbp" ||
-                intent.AmountReceived < expectedAmount)
-            {
-                return new PaymentCheck(false, false, "Card payment was not confirmed.");
-            }
-
-            return new PaymentCheck(true, false, string.Empty);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Stripe payment verification failed for {PaymentIntentId}", order.StripePaymentIntentId);
-            return new PaymentCheck(false, true, "Card payment is temporarily unavailable.");
-        }
-    }
-
-    private async Task<PaymentCheck> RefundStripePaymentAsync(DbOrder order, CancellationToken cancellationToken)
-    {
-        var secretKey = _configuration["Stripe:SecretKey"];
-        if (string.IsNullOrWhiteSpace(secretKey) || string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
-        {
-            return new PaymentCheck(false, true, "Card refund is temporarily unavailable.");
+            await _audit.LogAsync(
+                "StripeRefundFailed",
+                "Order",
+                order.Id,
+                null,
+                new
+                {
+                    order.OrderNumber,
+                    order.StripePaymentIntentId,
+                    result.Message,
+                    result.IsServiceUnavailable
+                });
         }
 
-        try
-        {
-            StripeConfiguration.ApiKey = secretKey;
-            var service = new RefundService();
-            var refund = await service.CreateAsync(new RefundCreateOptions
-            {
-                PaymentIntent = order.StripePaymentIntentId,
-                Reason = "requested_by_customer"
-            }, requestOptions: null, cancellationToken: cancellationToken);
-
-            if (refund.Status is "succeeded" or "pending")
-            {
-                order.PaymentStatus = "Refunded";
-                return new PaymentCheck(true, false, string.Empty);
-            }
-
-            return new PaymentCheck(false, false, "Card refund could not be confirmed.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Stripe refund failed for {PaymentIntentId}", order.StripePaymentIntentId);
-            return new PaymentCheck(false, true, "Card refund is temporarily unavailable.");
-        }
+        return result;
     }
 
     private static Order SanitizeOrder(Order order)
@@ -466,6 +521,13 @@ public class OrdersController : ControllerBase
         return order;
     }
 
+    private string? GetAuthenticatedCustomerId()
+    {
+        return User.Identity?.IsAuthenticated == true && User.IsInRole("customer")
+            ? User.FindFirstValue(ClaimTypes.NameIdentifier)
+            : null;
+    }
+
     private ObjectResult ServiceUnavailable()
     {
         return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ServiceUnavailableMessage });
@@ -474,4 +536,3 @@ public class OrdersController : ControllerBase
 
 internal sealed record StockCheck(bool IsValid, string Message);
 internal sealed record OpeningHoursResult(bool IsOpen, string HoursSummary);
-internal sealed record PaymentCheck(bool IsValid, bool IsServiceUnavailable, string Message);
