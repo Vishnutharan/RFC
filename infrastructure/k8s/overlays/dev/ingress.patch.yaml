@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rfc-web
+spec:
+  tls:
+    - hosts:
+        - dev-orders.rfcchickenwatford.com
+      secretName: rfc-web-tls
+  rules:
+    - host: dev-orders.rfcchickenwatford.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: rfc-backend
+                port:
+                  name: http
+          - path: /hubs
+            pathType: Prefix
+            backend:
+              service:
+                name: rfc-backend
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rfc-frontend
+                port:
+                  name: http

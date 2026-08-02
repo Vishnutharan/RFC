@@ -1,0 +1,9 @@
+terraform {
+  backend "s3" {
+    bucket         = "replace-with-bootstrap-output"
+    key            = "rfc-watford/prod/terraform.tfstate"
+    region         = "eu-west-2"
+    dynamodb_table = "rfc-watford-terraform-locks"
+    encrypt        = true
+  }
+}

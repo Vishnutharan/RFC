@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rfc-dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rfc-staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rfc-prod

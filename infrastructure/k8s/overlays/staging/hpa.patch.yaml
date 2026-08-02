@@ -1,0 +1,15 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rfc-backend
+spec:
+  minReplicas: 2
+  maxReplicas: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rfc-frontend
+spec:
+  minReplicas: 2
+  maxReplicas: 5

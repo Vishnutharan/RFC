@@ -1,7 +1,9 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Polly;
 using Polly.Extensions.Http;
 using RFC.Api.Data;
@@ -102,7 +104,9 @@ builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddHttpClient<GoogleMapsService>()
     .AddPolicyHandler(GetGoogleMapsRetryPolicy());
 builder.Services.AddSignalR();
-builder.Services.AddHealthChecks().AddCheck<PostgresHealthCheck>("postgres");
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"])
+    .AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"]);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -131,6 +135,14 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<OrderHub>("/hubs/order").RequireCors("ConfiguredOrigins");
 app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.Run();
 
