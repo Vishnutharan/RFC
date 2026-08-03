@@ -158,7 +158,15 @@ public class PaymentsController : ControllerBase
             }
 
             webhookEvent.ProcessedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            try
+            {
+                await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            }
+            catch (DbUpdateException)
+            {
+                _logger.LogInformation("Duplicate Stripe webhook event {EventId} caught by DB constraint.", stripeEvent.Id);
+                return Ok(new { received = true, duplicate = true });
+            }
 
             return Ok(new { received = true });
         }

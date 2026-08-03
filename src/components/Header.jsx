@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame, ShieldCheck, UtensilsCrossed, Tag, Clock, Star } from 'lucide-react';
+import { Menu, Search, ShoppingBag, Store, Truck, User, X, ShieldCheck, UtensilsCrossed, Tag, Clock, Star } from 'lucide-react';
 
 const navLinks = [
   { label: 'Menu', href: '#menu', icon: UtensilsCrossed },
@@ -74,13 +74,22 @@ export default function Header({
       <div className="announcement-bar">
         <div className="marquee-container">
           <span className="marquee-text">
-            Free delivery in our Watford zone - FIRST10 for 10% off - Fresh chicken cooked daily - Direct orders get priority
+            🔥 FAST & FREE DELIVERY IN WATFORD &bull; 📞 ORDER DIRECT: 01923 677407 &bull; USE &apos;FIRST10&apos; FOR 10% OFF &bull; Uber Eats & Just Eat Available
           </span>
         </div>
-        <button className="staff-panel-btn" type="button" onClick={onStaffPanelClick}>
-          <ShieldCheck size={14} style={{ marginRight: 4 }} />
-          {adminLabel}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <a
+            href="tel:01923677407"
+            className="staff-panel-btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none', background: 'rgba(255,255,255,0.25)' }}
+          >
+            📞 01923 677407
+          </a>
+          <button className="staff-panel-btn" type="button" onClick={onStaffPanelClick}>
+            <ShieldCheck size={14} style={{ marginRight: 4 }} />
+            {adminLabel}
+          </button>
+        </div>
       </div>
 
       <div className="header-main">
@@ -95,12 +104,19 @@ export default function Header({
           </button>
 
           <button className="brand-container" type="button" onClick={() => isAdminView && onStaffPanelClick()}>
-            <span className="logo-badge">
-              <Flame size={24} aria-hidden="true" />
-            </span>
+            <div className="logo-badge" style={{ padding: '2px', background: 'var(--red)', overflow: 'hidden' }}>
+              <img
+                src="/assets/rfc.png"
+                alt="RFC Watford Logo"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-xs)' }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            </div>
             <span>
               <span className="brand-name">RFC</span>
-              <span className="brand-subtitle">Watford Kitchen</span>
+              <span className="brand-subtitle">Chicken &bull; Peri Peri &bull; Burgers</span>
             </span>
           </button>
 

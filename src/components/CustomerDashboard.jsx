@@ -3,7 +3,7 @@ import {
   X, User, ShoppingBag, MapPin, Printer, RotateCcw, Sparkles,
   Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle,
   ShieldCheck, ArrowLeft, Clock,
-  Eye, EyeOff, ArrowRight
+  Eye, EyeOff, Check, Tag
 } from 'lucide-react';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
@@ -13,23 +13,18 @@ import { deleteCurrentCustomer } from '../services/api';
 const EMPTY_PROFILE = { name: '', phone: '', email: '', address: '', postcode: '' };
 const EMPTY_AUTH_FORM = { name: '', email: '', password: '', phone: '', address: '', postcode: '', consentAccepted: false };
 
-const AUTH_BENEFITS = [
-  { icon: Clock, title: 'Live order tracking', desc: 'Follow kitchen and delivery updates from one place.' },
-  { icon: ShoppingBag, title: 'Account order history', desc: 'Review recent orders linked to your signed-in account.' },
-  { icon: ShieldCheck, title: 'Server-backed profile', desc: 'Manage delivery details through your authenticated account.' }
-];
 
 export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, onAccountDeleted, showToast }) {
   const [activeTab, setActiveTab] = useState('orders');
   const [currentUser, setCurrentUser] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
 
-  // Profile Edit State
   const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [isSessionLoading, setIsSessionLoading] = useState(false);
+  const [_isSessionLoading, setIsSessionLoading] = useState(false);
+
   const [accountOrders, setAccountOrders] = useState([]);
   const [isOrderHistoryLoading, setIsOrderHistoryLoading] = useState(false);
 
@@ -232,130 +227,259 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   ];
 
   return (
-    <div style={{ height: '100vh', maxHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', width: '100%', overflow: 'hidden' }}>
-      {/* Top Dashboard Header Bar */}
-      <div style={{ background: '#FFF', borderBottom: '1px solid var(--border)', padding: '0 24px', height: '58px', flexShrink: 0, zIndex: 10, display: 'flex', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
-        <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-alt)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', padding: '6px 14px', borderRadius: 'var(--radius-full)', transition: 'all 0.15s ease' }}>
-            <ArrowLeft size={16} /> Back to Menu
-          </button>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', boxShadow: '0 0 8px var(--green)' }}></div>
-            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.1rem', color: 'var(--text)', letterSpacing: '-0.2px' }}>RFC Customer Portal</span>
-          </div>
-
-          {authMode === 'none' && (
-            <button disabled={isSessionLoading} onClick={() => setAuthMode('login')} className="mode-btn" style={{ padding: '6px 16px', fontSize: '0.85rem', border: '1px solid var(--border)', background: '#FFF' }}>
-              {isSessionLoading ? 'Loading…' : (isAuthenticated ? 'Switch Account' : 'Sign In')}
-            </button>
-          )}
-          {authMode !== 'none' && <div style={{ width: 128 }} aria-hidden="true" />}
-        </div>
-      </div>
-
-      <main className="customer-dashboard-container" style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: '1400px', margin: '0 auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
+    <div style={{ height: '100vh', maxHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#F8FAFC', width: '100vw', overflow: 'hidden' }}>
+      
+      <main className="customer-dashboard-container" style={{ flex: 1, minHeight: 0, width: '100%', height: '100%', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
         
         {authMode !== 'none' ? (
-          <div className="customer-auth-shell">
-            <div className={`customer-auth-card ${authMode === 'register' ? 'is-register' : 'is-login'}`}>
-              {/* Left Brand Hero Panel */}
-              <div className="customer-auth-benefits">
-                <div>
-                  <div className="customer-auth-kicker">
-                    <Sparkles size={14} color="var(--amber)" /> RFC CUSTOMER PORTAL
-                  </div>
-                  <h2 className="customer-auth-title">
-                    Account setup for faster ordering.
-                  </h2>
-                  <p className="customer-auth-copy">
-                    Keep your order history and delivery details together in one account dashboard.
-                  </p>
-
-                  <div className="customer-auth-benefit-list">
-                    {AUTH_BENEFITS.map((f, i) => {
-                      const FIcon = f.icon;
-                      return (
-                        <div key={i} className="customer-auth-benefit-item">
-                          <div className="customer-auth-benefit-icon">
-                            <FIcon size={16} />
-                          </div>
-                          <div>
-                            <strong>{f.title}</strong>
-                            <span>{f.desc}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
+          <div className="customer-auth-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '20px', position: 'relative' }}>
+            <div className={`customer-auth-card ${authMode === 'register' ? 'is-register' : 'is-login'}`} style={{
+              width: '100%',
+              maxWidth: authMode === 'register' ? '1000px' : '920px',
+              maxHeight: '660px',
+              gridTemplateColumns: '1fr 1fr',
+              borderRadius: '24px',
+              boxShadow: '0 25px 60px rgba(15, 23, 42, 0.2)',
+              border: 'none',
+              background: '#FFF',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              {/* Left Brand Hero Panel (Rich RFC Crimson & Amber Palette) */}
+              <div className="customer-auth-benefits" style={{
+                background: 'linear-gradient(145deg, #0F172A 0%, #1E1B2E 35%, #C8102E 85%, #E52929 100%)',
+                position: 'relative',
+                overflow: 'hidden',
+                padding: '40px 36px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
+              }}>
+                {/* Abstract Diagonal Gradient Pill Graphics */}
+                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 1 }}>
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-40px',
+                    left: '-30px',
+                    width: '180px',
+                    height: '55px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.25), rgba(245,158,11,0.5))',
+                    transform: 'rotate(-42deg)'
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '10px',
+                    left: '50px',
+                    width: '240px',
+                    height: '65px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.3), rgba(245,158,11,0.6))',
+                    transform: 'rotate(-42deg)'
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '90px',
+                    left: '140px',
+                    width: '160px',
+                    height: '45px',
+                    borderRadius: '9999px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(229,41,41,0.5))',
+                    transform: 'rotate(-42deg)'
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: '60px',
+                    right: '-20px',
+                    width: '120px',
+                    height: '120px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)'
+                  }} />
                 </div>
 
+                {/* Left Content Area */}
+                <div style={{ position: 'relative', zIndex: 2 }}>
+                  <div className="customer-auth-kicker" style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.25)' }}>
+                    <img
+                      src="/assets/rfc.png"
+                      alt="RFC Logo"
+                      style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: '4px' }}
+                    />
+                    <span style={{ color: '#FFF', fontWeight: 900, fontSize: '0.78rem' }}>RFC WATFORD PORTAL</span>
+                  </div>
+
+                  <h1 style={{ fontFamily: 'var(--font-head)', fontSize: '2.2rem', fontWeight: 900, color: '#FFF', lineHeight: 1.15, marginTop: '20px', marginBottom: '12px' }}>
+                    Welcome to RFC Watford
+                  </h1>
+
+                  <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem', lineHeight: 1.5, maxWidth: '360px', margin: 0, fontWeight: 500 }}>
+                    Freshly prepared artisan fried chicken, stacked box meals, peri peri & hot wings delivered fresh in Watford.
+                  </p>
+
+                  <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#FFF', fontSize: '0.85rem', fontWeight: 700 }}>
+                      <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: '50%', padding: '4px', display: 'flex' }}>✓</span> 1-Click Order Tracking & History
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#FFF', fontSize: '0.85rem', fontWeight: 700 }}>
+                      <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: '50%', padding: '4px', display: 'flex' }}>✓</span> Fast Local Watford Delivery
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#FFF', fontSize: '0.85rem', fontWeight: 700 }}>
+                      <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: '50%', padding: '4px', display: 'flex' }}>✓</span> Member Vouchers & Stamp Rewards
+                    </div>
+                  </div>
+                </div>
+
+                {/* Left Bottom Footer */}
+                <div style={{ position: 'relative', zIndex: 2, paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: '#FFF', fontWeight: 700 }}>
+                  <span>📍 119 Courtlands Drive</span>
+                  <span>📞 01923 677407</span>
+                </div>
               </div>
 
               {/* Right Form Panel */}
-              <div className="customer-auth-form-panel">
-                
-                {/* Segmented Control Pill */}
-                <div className="customer-auth-segment">
+              <div className="customer-auth-form-panel" style={{
+                padding: '32px 36px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                background: '#FFF',
+                position: 'relative'
+              }}>
+                {/* Top Actions Bar: Back to Menu & Close */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <button
                     type="button"
-                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    className={`customer-auth-segment-btn ${authMode === 'login' ? 'active' : ''}`}
+                    onClick={() => setAuthMode('none')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'var(--surface-alt)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-full)',
+                      padding: '5px 12px',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      color: 'var(--text2)',
+                      cursor: 'pointer'
+                    }}
                   >
-                    Sign In
+                    <ArrowLeft size={14} /> Back to Menu
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => { setAuthMode('register'); setAuthError(''); }}
-                    className={`customer-auth-segment-btn ${authMode === 'register' ? 'active' : ''}`}
+                    onClick={() => setAuthMode('none')}
+                    aria-label="Close portal"
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: 'var(--surface-alt)',
+                      border: '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--text2)',
+                      cursor: 'pointer'
+                    }}
                   >
-                    Create Account
+                    <X size={16} />
                   </button>
                 </div>
 
-                <h3 className="customer-auth-heading">
-                  {authMode === 'login' ? 'Welcome Back!' : 'Create Account'}
-                </h3>
-                <p className="customer-auth-subtitle">
-                  {authMode === 'login' ? 'Please enter your account details below.' : 'Fill in your details to create your customer account.'}
-                </p>
+                {/* Mode Switch Pills */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+                  <div className="customer-auth-segment" style={{ width: '100%', maxWidth: '280px', borderRadius: '9999px', padding: '4px', background: '#F1F5F9', border: '1px solid var(--border)' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                      className={`customer-auth-segment-btn ${authMode === 'login' ? 'active' : ''}`}
+                      style={{ borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 800 }}
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode('register'); setAuthError(''); }}
+                      className={`customer-auth-segment-btn ${authMode === 'register' ? 'active' : ''}`}
+                      style={{ borderRadius: '9999px', fontSize: '0.82rem', fontWeight: 800 }}
+                    >
+                      Register
+                    </button>
+                  </div>
+                </div>
+
+                {/* Form Header */}
+                <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900, color: 'var(--red)', letterSpacing: '0.5px', textTransform: 'uppercase', margin: 0 }}>
+                    {authMode === 'login' ? 'USER LOGIN' : 'CREATE ACCOUNT'}
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text2)', margin: '4px 0 0 0', fontWeight: 600 }}>
+                    {authMode === 'login' ? 'Please enter your account credentials' : 'Fill in your details to create an account'}
+                  </p>
+                </div>
 
                 {authError && (
-                  <div className="customer-auth-error">
+                  <div className="customer-auth-error" style={{ borderRadius: '9999px', padding: '8px 16px', fontSize: '0.82rem', justifyContent: 'center', marginBottom: '12px' }}>
                     <AlertTriangle size={15} /> {authError}
                   </div>
                 )}
 
-                <form onSubmit={handleAuthSubmit} className={`customer-auth-form ${authMode === 'register' ? 'is-register' : 'is-login'}`}>
+                {/* Form with High-Contrast Soft Inputs */}
+                <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {authMode === 'register' && (
                     <div>
-                      <label className="customer-auth-label">Full Name</label>
-                      <div className="input-group"><User size={15} /><input autoComplete="name" placeholder="Your full name" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                      <div className="input-group" style={{ borderRadius: '9999px', background: '#F8FAFC', border: '1.5px solid #CBD5E1', padding: '0 18px', height: '44px' }}>
+                        <User size={16} color="var(--red)" />
+                        <input
+                          autoComplete="name"
+                          placeholder="Full Name"
+                          value={authForm.name}
+                          onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
+                          required
+                          style={{ fontSize: '0.88rem', color: 'var(--text)', fontWeight: 600 }}
+                        />
+                      </div>
                     </div>
                   )}
 
                   <div>
-                    <label className="customer-auth-label">Email Address</label>
-                    <div className="input-group"><Mail size={15} /><input type="email" autoComplete="email" placeholder="you@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                    <div className="input-group" style={{ borderRadius: '9999px', background: '#F8FAFC', border: '1.5px solid #CBD5E1', padding: '0 18px', height: '44px' }}>
+                      <Mail size={16} color="var(--red)" />
+                      <input
+                        type="email"
+                        autoComplete="email"
+                        placeholder="Email Address"
+                        value={authForm.email}
+                        onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+                        required
+                        style={{ fontSize: '0.88rem', color: 'var(--text)', fontWeight: 600 }}
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="customer-auth-label">Password</label>
-                    <div className="input-group" style={{ position: 'relative' }}>
-                      <Lock size={15} />
+                    <div className="input-group" style={{ position: 'relative', borderRadius: '9999px', background: '#F8FAFC', border: '1.5px solid #CBD5E1', padding: '0 18px', height: '44px' }}>
+                      <Lock size={16} color="var(--red)" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
                         minLength={authMode === 'login' ? 8 : 12}
                         maxLength={128}
-                        placeholder={authMode === 'login' ? 'Your password' : '12+ characters with upper, lower and a number'}
+                        placeholder="Password"
                         value={authForm.password}
                         onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
                         required
-                        style={{ padding: '9px 36px 9px 12px', fontSize: '0.88rem', width: '100%' }}
+                        style={{ fontSize: '0.88rem', color: 'var(--text)', paddingRight: '30px', fontWeight: 600 }}
                       />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', display: 'flex' }}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
                         {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                     </div>
@@ -364,55 +488,136 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   {authMode === 'register' && (
                     <>
                       <div>
-                        <label className="customer-auth-label">Phone Number</label>
-                        <div className="input-group"><Phone size={15} /><input autoComplete="tel" placeholder="Your phone number" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
-                      </div>
-                      <div className="customer-auth-address-grid">
-                        <div>
-                          <label className="customer-auth-label">Street Address</label>
-                          <div className="input-group"><MapPin size={15} /><input autoComplete="street-address" placeholder="Your street address" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
-                        </div>
-                        <div>
-                          <label className="customer-auth-label">Postcode</label>
-                          <div className="input-group"><MapPin size={15} /><input autoComplete="postal-code" placeholder="Postcode" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value.toUpperCase() })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                        <div className="input-group" style={{ borderRadius: '9999px', background: '#F8FAFC', border: '1.5px solid #CBD5E1', padding: '0 18px', height: '44px' }}>
+                          <Phone size={16} color="var(--red)" />
+                          <input
+                            autoComplete="tel"
+                            placeholder="Phone Number (e.g. 07123 456789)"
+                            value={authForm.phone}
+                            onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })}
+                            style={{ fontSize: '0.88rem', color: 'var(--text)', fontWeight: 600 }}
+                          />
                         </div>
                       </div>
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.4 }}>
-                        <input
-                          type="checkbox"
-                          checked={authForm.consentAccepted}
-                          onChange={(event) => setAuthForm({ ...authForm, consentAccepted: event.target.checked })}
-                          required
-                          style={{ marginTop: '2px' }}
-                        />
-                        <span>I consent to the privacy policy and the processing of my account and order details.</span>
-                      </label>
+                      <div className="customer-auth-address-grid" style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: '8px' }}>
+                        <div>
+                          <div className="input-group" style={{ borderRadius: '9999px', background: '#F8FAFC', border: '1.5px solid #CBD5E1', padding: '0 16px', height: '44px' }}>
+                            <MapPin size={16} color="var(--red)" />
+                            <input
+                              autoComplete="street-address"
+                              placeholder="Street Address"
+                              value={authForm.address}
+                              onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })}
+                              style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 600 }}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="input-group" style={{ borderRadius: '9999px', background: '#F8FAFC', border: '1.5px solid #CBD5E1', padding: '0 14px', height: '44px' }}>
+                            <MapPin size={16} color="var(--red)" />
+                            <input
+                              autoComplete="postal-code"
+                              placeholder="Postcode"
+                              value={authForm.postcode}
+                              onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value.toUpperCase() })}
+                              style={{ fontSize: '0.85rem', color: 'var(--text)', fontWeight: 600 }}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </>
                   )}
 
-                  <button
-                    type="submit"
-                    className="btn-submit-modal customer-auth-submit"
-                    disabled={isAuthSubmitting}
-                  >
-                    {isAuthSubmitting ? 'Please wait…' : (authMode === 'login' ? 'Sign In' : 'Create Account')} <ArrowRight size={16} />
-                  </button>
+                  {/* Sub-row Options & Back to Login Switcher */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text2)', padding: '0 4px', margin: '2px 0 4px 0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700 }}>
+                      <input
+                        type="checkbox"
+                        defaultChecked
+                        style={{ accentColor: 'var(--red)', borderRadius: '4px' }}
+                      />
+                      <span>Remember</span>
+                    </label>
+
+                    {authMode === 'register' ? (
+                      <button
+                        type="button"
+                        onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--red)', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                      >
+                        ← Back to Sign In
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => showToast?.('Please contact support or reset password via your registered email.', 'info')}
+                        style={{ background: 'none', border: 'none', color: 'var(--red)', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
+
+                  {authMode === 'register' && (
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.75rem', color: 'var(--text2)', lineHeight: 1.4, padding: '0 4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={authForm.consentAccepted}
+                        onChange={(event) => setAuthForm({ ...authForm, consentAccepted: event.target.checked })}
+                        required
+                        style={{ marginTop: '2px', accentColor: 'var(--red)' }}
+                      />
+                      <span>I consent to the privacy policy for processing my customer account & order details.</span>
+                    </label>
+                  )}
+
+                  {/* Centered Crimson Pill Action Button */}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: '6px' }}>
+                    <button
+                      type="submit"
+                      disabled={isAuthSubmitting}
+                      style={{
+                        width: '210px',
+                        height: '46px',
+                        borderRadius: '9999px',
+                        background: 'linear-gradient(135deg, var(--red) 0%, #C8102E 100%)',
+                        color: '#FFF',
+                        fontFamily: 'var(--font-head)',
+                        fontWeight: 900,
+                        fontSize: '0.95rem',
+                        letterSpacing: '0.8px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        boxShadow: 'var(--shadow-red)',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      {isAuthSubmitting ? 'PLEASE WAIT…' : (authMode === 'login' ? 'LOGIN' : 'REGISTER')}
+                    </button>
+                  </div>
                 </form>
 
-                <div className="customer-auth-guest">
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode('none')}
-                  >
-                    <span>Continue as Guest Customer</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
+                {/* Additional Back to Login link when in Register mode */}
+                {authMode === 'register' && (
+                  <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                      style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Already have an account? <strong style={{ color: 'var(--red)', textDecoration: 'underline' }}>Sign In here</strong>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ) : (
-          <div className="portal-grid" style={{ display: 'grid', gridTemplateColumns: '290px 1fr', gap: '20px', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+          <div className="portal-grid" style={{ display: 'grid', gridTemplateColumns: '270px 1fr', gap: '0', height: '100%', minHeight: 0, width: '100%', overflow: 'hidden' }}>
             <style>{`
               @media (max-width: 899px) {
                 .portal-grid { display: flex !important; flex-direction: column !important; overflow-y: auto !important; }
@@ -420,159 +625,193 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               }
             `}</style>
 
-            {/* Left Sidebar */}
-            <aside style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+            {/* Dark Sidebar (Full Height Edge-to-Edge TailAdmin Layout) */}
+            <aside style={{ background: '#1C2434', borderRadius: 0, color: '#DEE4EE', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', padding: '24px 18px', borderRight: '1px solid rgba(255,255,255,0.05)', boxShadow: '4px 0 20px rgba(0,0,0,0.08)' }}>
               
-              {/* Profile Summary Header */}
-              <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, var(--red-light), #FFF)', borderBottom: '1px solid var(--border)' }}>
+              {/* Brand Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '16px' }}>
+                <img src="/assets/rfc.png" alt="RFC Logo" style={{ width: 28, height: 28, borderRadius: '6px', objectFit: 'cover' }} />
+                <div>
+                  <strong style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', color: '#FFF', display: 'block', lineHeight: 1.1 }}>
+                    RFC Portal
+                  </strong>
+                  <span style={{ fontSize: '0.68rem', color: '#8A99AD', fontWeight: 700 }}>Customer Account & Rewards</span>
+                </div>
+              </div>
+
+              {/* Profile Card */}
+              <div style={{ padding: '12px', background: '#24303F', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div style={{ padding: '2px', background: 'linear-gradient(135deg, var(--red), var(--amber))', borderRadius: '50%' }}>
-                      {renderUserAvatar(46)}
-                    </div>
-                    <div style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, background: 'var(--green)', borderRadius: '50%', border: '2px solid #FFF' }}></div>
+                    {renderUserAvatar(42)}
+                    <div style={{ position: 'absolute', bottom: 0, right: 0, width: 9, height: 9, background: '#10B981', borderRadius: '50%', border: '2px solid #24303F' }}></div>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.05rem', fontWeight: 900, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {currentUser?.name || 'Customer'}
-                      </h3>
-                    </div>
-                    {currentUser?.name && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--green)', color: '#FFF', padding: '1px 7px', borderRadius: 'var(--radius-full)', fontSize: '0.68rem', fontWeight: 800, marginTop: '2px' }}>
-                        <ShieldCheck size={9} /> Signed in
-                      </div>
-                    )}
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text2)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <MapPin size={11} style={{ flexShrink: 0 }} /> {currentUser?.address || 'Update address'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Quick Stats Dual Strip */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '10px', padding: '6px 10px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Orders</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--red)', fontFamily: 'var(--font-head)' }}>{visibleOrders.length}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderLeft: '1px solid var(--border)', paddingLeft: '6px' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Account</span>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 900, color: isAuthenticated ? 'var(--green)' : 'var(--text2)', fontFamily: 'var(--font-head)' }}>{isAuthenticated ? 'Signed in' : 'Guest'}</span>
+                    <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 900, color: '#FFF', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {currentUser?.name || 'Valued Customer'}
+                    </h3>
+                    <span style={{ fontSize: '0.68rem', color: '#10B981', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                      <ShieldCheck size={10} /> {isAuthenticated ? 'VIP Customer' : 'Guest Mode'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Navigation Menu Section */}
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '6px 0' }}>
-                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.8px', padding: '8px 16px 4px' }}>
-                  Portal Menu
+              {/* Navigation Links */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#8A99AD', letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', paddingLeft: '8px' }}>
+                    MY ACCOUNT
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {TABS.map(t => {
+                      const Icon = t.icon;
+                      const isActive = activeTab === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => setActiveTab(t.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '10px 12px', borderRadius: '8px',
+                            background: isActive ? '#333A48' : 'transparent',
+                            color: isActive ? '#FFF' : '#8A99AD',
+                            border: 'none', cursor: 'pointer', transition: 'all 0.15s ease',
+                            fontWeight: isActive ? 800 : 600, fontSize: '0.85rem'
+                          }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Icon size={16} color={isActive ? 'var(--red)' : '#8A99AD'} />
+                            <span>{t.label}</span>
+                          </span>
+                          {t.count && (
+                            <span style={{ background: isActive ? 'var(--red)' : 'rgba(255,255,255,0.1)', color: '#FFF', padding: '2px 7px', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 800 }}>
+                              {t.count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {TABS.map(t => {
-                  const Icon = t.icon;
-                  const isActive = activeTab === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setActiveTab(t.id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        margin: '2px 8px', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
-                        background: isActive ? 'var(--red-light)' : 'transparent',
-                        border: 'none',
-                        cursor: 'pointer', transition: 'all 0.15s ease',
-                        color: isActive ? 'var(--red)' : 'var(--text)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: isActive ? 800 : 600, fontSize: '0.88rem' }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 6, background: isActive ? '#FFF' : 'var(--surface-alt)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--red)' : 'var(--text2)' }}>
-                          <Icon size={16} />
-                        </div>
-                        {t.label}
-                      </div>
-                      {t.count && <span style={{ background: isActive ? '#FFF' : 'var(--surface-alt)', color: isActive ? 'var(--red)' : 'var(--text2)', padding: '2px 7px', borderRadius: 'var(--radius-full)', fontSize: '0.7rem', fontWeight: 800 }}>{t.count}</span>}
-                    </button>
-                  );
-                })}
-
-                <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.8px', padding: '8px 16px 4px', borderTop: '1px solid var(--border-light)' }}>
-                    Account & System
-                  </div>
-                  
+                <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                   <button
                     onClick={() => setAuthMode('login')}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 8px', padding: '9px 12px',
-                      background: 'transparent', border: 'none', borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer', color: 'var(--text2)', fontWeight: 600, fontSize: '0.88rem',
-                      width: 'calc(100% - 16px)'
+                      display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
+                      background: 'transparent', border: 'none', borderRadius: '8px',
+                      cursor: 'pointer', color: '#8A99AD', fontWeight: 600, fontSize: '0.85rem', width: '100%'
                     }}
                   >
-                    <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--surface-alt)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)' }}>
-                      <Lock size={15} />
-                    </div>
-                    Switch Account
+                    <Lock size={15} />
+                    <span>Switch Account</span>
                   </button>
 
                   {isAuthenticated && (
                     <button
                       onClick={handleLogout}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 8px 8px', padding: '9px 12px',
-                        background: 'var(--red-light)', border: 'none', borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer', color: 'var(--red)', fontWeight: 700, fontSize: '0.88rem',
-                        width: 'calc(100% - 16px)'
+                        display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', padding: '10px 12px',
+                        background: 'rgba(225, 29, 72, 0.15)', border: '1px solid rgba(225, 29, 72, 0.3)', borderRadius: '8px',
+                        cursor: 'pointer', color: '#F43F5E', fontWeight: 800, fontSize: '0.85rem', width: '100%'
                       }}
                     >
-                      <div style={{ width: 28, height: 28, borderRadius: 6, background: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}>
-                        <LogOut size={15} />
-                      </div>
-                      Log Out
+                      <LogOut size={15} />
+                      <span>Log Out</span>
                     </button>
                   )}
                 </div>
               </div>
             </aside>
 
-            {/* Right Content Panel */}
-            <div style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-              {/* Content Panel Header */}
-              <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFF', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {(() => {
-                    const currentTabObj = TABS.find(t => t.id === activeTab);
-                    const TabIcon = currentTabObj?.icon || ShoppingBag;
-                    return (
-                      <>
-                        <div style={{ padding: '8px', background: 'var(--red-light)', borderRadius: 'var(--radius-sm)', color: 'var(--red)', display: 'flex' }}>
-                          <TabIcon size={18} />
-                        </div>
-                        <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900, color: 'var(--text)', margin: 0 }}>
-                          {currentTabObj?.label || 'My Orders'}
-                        </h2>
-                      </>
-                    );
-                  })()}
+            {/* Right Content Area (Full Height Edge-to-Edge) */}
+            <div style={{ background: '#F8FAFC', borderRadius: 0, border: 'none', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+              
+              {/* Content Top Navbar */}
+              <div style={{ padding: '14px 24px', background: '#FFF', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                <div>
+                  <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 900, color: '#1E293B', margin: 0 }}>
+                    Welcome Back, {currentUser?.name || 'Customer'}! 👋
+                  </h2>
+                  <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
+                    Store: RFC Watford • 119 Courtlands Drive (01923 677407)
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {activeTab === 'orders' && visibleOrders.length > 0 && (
-                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text2)', background: 'var(--surface-alt)', padding: '4px 12px', borderRadius: 'var(--radius-full)' }}>
-                      {visibleOrders.length} recent {visibleOrders.length === 1 ? 'order' : 'orders'} shown
-                    </span>
-                  )}
-                  {activeTab === 'profile' && isAuthenticated && (
-                    <button onClick={() => setIsEditingProfile(!isEditingProfile)} className="btn-add-item" style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Edit3 size={14} /> {isEditingProfile ? 'Cancel Editing' : 'Edit Profile'}
-                    </button>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button
+                    onClick={onClose}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      background: 'var(--red)', color: '#FFF', border: 'none',
+                      padding: '8px 16px', borderRadius: '9999px', fontSize: '0.82rem',
+                      fontWeight: 800, cursor: 'pointer', boxShadow: 'var(--shadow-red)'
+                    }}
+                  >
+                    <span>Order Food Now</span>
+                  </button>
+
+                  <button
+                    onClick={onClose}
+                    style={{
+                      width: 32, height: 32, borderRadius: '50%',
+                      background: '#F1F5F9', border: '1px solid #E2E8F0',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#64748B', cursor: 'pointer'
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               </div>
 
-              {/* Content Panel Body (Inner Scroll) */}
+              {/* Scrollable Main Area */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minHeight: 0 }}>
                 
+                {/* 4 KPI Summary Cards Grid (TailAdmin Style) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Orders Placed</span>
+                      <ShoppingBag size={18} color="var(--red)" />
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: '#1E293B' }}>
+                      {visibleOrders.length} Orders
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Stamp Rewards</span>
+                      <Sparkles size={18} color="#D97706" />
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: '#D97706' }}>
+                      {visibleOrders.length * 50} Pts
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Postcode Zone</span>
+                      <MapPin size={18} color="#059669" />
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 900, color: '#1E293B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {currentUser?.postcode || 'WD17 4HZ'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>Active Order</span>
+                      <Clock size={18} color="#2563EB" />
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', fontWeight: 900, color: '#2563EB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {visibleOrders[0] ? `#${visibleOrders[0].orderNumber}` : 'No Active Order'}
+                    </div>
+                  </div>
+                </div>
+
                 {activeTab === 'orders' && (
                   <div>
                     {isOrderHistoryLoading ? (
@@ -698,7 +937,11 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   </div>
                 )}
 
-                {activeTab === 'loyalty' && (
+                {activeTab === 'loyalty' && (() => {
+                  const loyaltyCount = visibleOrders.length;
+                  const currentStamps = loyaltyCount % 8;
+                  const loyaltyPercent = Math.min(100, Math.round((currentStamps / 8) * 100));
+                  return (
                   <div>
                     <div style={{ background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)', borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid #FDE2E2', textAlign: 'center', marginBottom: '20px' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: loyaltyCount >= 8 ? 'var(--amber)' : loyaltyCount >= 4 ? 'var(--indigo)' : 'var(--red)', color: '#FFF', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 900, marginBottom: '10px', boxShadow: 'var(--shadow-sm)' }}>
@@ -812,7 +1055,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                       </div>
                     </div>
                   </div>
-                )}
+                ); })()}
 
                 {activeTab === 'vouchers' && (
                   <div style={{ textAlign: 'center', padding: '44px 20px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' }}>

@@ -254,6 +254,20 @@ export const MENU_ITEMS = [
 
   // --- FAMILY BUCKETS ---
   {
+    id: 'bk-0',
+    categoryId: 'family-buckets',
+    name: 'Bargain Bucket (Storefront Special)',
+    description: '10 Pieces Original Crispy Chicken + Hot Spicy Wings & 2 Regular Fries.',
+    price: 11.99,
+    calorieInfo: '2100 kcal',
+    isBestseller: true,
+    isSpicy: true,
+    imageUrl: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=600&auto=format&fit=crop&q=80',
+    hasOptions: true,
+    sideChoices: DEFAULT_SIDE_OPTIONS,
+    drinkChoices: DEFAULT_DRINK_OPTIONS,
+  },
+  {
     id: 'bk-1',
     categoryId: 'family-buckets',
     name: 'Family Feast Meal',

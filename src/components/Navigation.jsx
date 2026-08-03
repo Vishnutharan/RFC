@@ -1,4 +1,6 @@
 import { useMemo, useRef } from 'react';
+import PropTypes from 'prop-types';
+import { motion } from 'framer-motion';
 import {
   Beef,
   Drumstick,
@@ -9,6 +11,7 @@ import {
   ShoppingBag,
   Smile,
   UtensilsCrossed,
+  Flame
 } from 'lucide-react';
 import { CATEGORIES, MENU_ITEMS } from '../data/initialMenu';
 
@@ -22,6 +25,7 @@ const ICON_MAP = {
   Popcorn,
   IceCream,
   Smile,
+  Flame
 };
 
 const Navigation = ({ activeCategory, setActiveCategory }) => {
@@ -51,26 +55,63 @@ const Navigation = ({ activeCategory, setActiveCategory }) => {
   };
 
   return (
-    <nav className="category-nav-bar" aria-label="Menu categories">
+    <nav className="category-nav-bar" aria-label="Menu categories" id="menu">
       <div className="category-nav-container" ref={scrollRef}>
         {categories.map((cat) => {
           const Icon = typeof cat.icon === 'string' ? (ICON_MAP[cat.icon] || Grid2X2) : (cat.icon || Grid2X2);
+          const isActive = activeCategory === cat.id;
+          const count = getCount(cat.id);
+
           return (
-            <button
+            <motion.button
               key={cat.id}
               data-id={cat.id}
-              className={`cat-tab ${activeCategory === cat.id ? 'active' : ''}`}
+              whileTap={{ scale: 0.96 }}
+              className={`cat-tab ${isActive ? 'active' : ''}`}
               onClick={() => handleClick(cat.id)}
+              style={{ position: 'relative' }}
             >
-              <Icon className="cat-icon" size={16} />
-              <span className="cat-name">{cat.name}</span>
-              <span className="cat-badge">{getCount(cat.id)}</span>
-            </button>
+              {isActive && (
+                <motion.div
+                  layoutId="activeCategoryBg"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--red)',
+                    boxShadow: 'var(--shadow-red)',
+                    zIndex: 0
+                  }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span style={{ position: 'relative', zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Icon className="cat-icon" size={16} style={{ color: isActive ? '#FFF' : 'var(--red)' }} />
+                <span className="cat-name" style={{ color: isActive ? '#FFF' : 'var(--text)', fontWeight: 800 }}>
+                  {cat.name}
+                </span>
+                <span
+                  className="cat-badge"
+                  style={{
+                    background: isActive ? 'rgba(255,255,255,0.25)' : 'var(--surface-alt)',
+                    color: isActive ? '#FFF' : 'var(--text2)',
+                    fontWeight: 900
+                  }}
+                >
+                  {count}
+                </span>
+              </span>
+            </motion.button>
           );
         })}
       </div>
     </nav>
   );
+};
+
+Navigation.propTypes = {
+  activeCategory: PropTypes.string.isRequired,
+  setActiveCategory: PropTypes.func.isRequired
 };
 
 export default Navigation;

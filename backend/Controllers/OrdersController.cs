@@ -171,10 +171,11 @@ public class OrdersController : ControllerBase
                 if (_db.Database.IsRelational())
                 {
                     // Serialise finalisation for a checkout before relying on the
-                    // unique indexes. Without this lock, a concurrent loser could
-                    // refund a payment already committed by the winning request.
+                    // unique indexes.
+                    var lockBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(pricedOrder.CheckoutId!));
+                    var lockId = BitConverter.ToInt64(lockBytes, 0);
                     await _db.Database.ExecuteSqlInterpolatedAsync(
-                        $"SELECT pg_advisory_xact_lock(hashtextextended({pricedOrder.CheckoutId!}, 0));",
+                        $"SELECT pg_advisory_xact_lock({lockId});",
                         cancellationToken);
                 }
 

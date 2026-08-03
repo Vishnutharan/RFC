@@ -104,7 +104,11 @@ export const useCart = (showToast) => {
 
   const reorder = useCallback((pastOrder) => {
     if (!pastOrder.items?.length) return false;
-    setCartItems(pastOrder.items);
+    const reorderedItems = pastOrder.items.map((item, idx) => ({
+      ...item,
+      id: `${item.id || 'item'}-${Date.now()}-${idx}`
+    }));
+    setCartItems(reorderedItems);
     setAppliedVoucher(null);
     showToast?.('Reordered past items into your basket.');
     return true;

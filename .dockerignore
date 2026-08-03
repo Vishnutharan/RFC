@@ -1,8 +1,7 @@
 node_modules
 dist
 .git
-.env
-.env.local
+**/.env*
 backend/bin
 backend/obj
 backend/build-check

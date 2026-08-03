@@ -23,7 +23,10 @@ public sealed class CsrfMiddleware
     {
         _next = next;
         _environment = environment;
-        _allowedOrigins = (configuration["Cors:AllowedOrigins"] ?? string.Empty)
+        var rawOrigins = configuration["Cors:AllowedOrigins"] ??
+                         configuration["Cors__AllowedOrigins"] ??
+                         "http://localhost:3000,http://127.0.0.1:3000";
+        _allowedOrigins = rawOrigins
             .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(origin => origin.TrimEnd('/'))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);

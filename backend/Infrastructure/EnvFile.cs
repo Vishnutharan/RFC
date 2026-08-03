@@ -49,6 +49,11 @@ public static class EnvFile
             {
                 Environment.SetEnvironmentVariable(key, value);
             }
+            var normalizedKey = key.Replace("__", ":");
+            if (normalizedKey != key && Environment.GetEnvironmentVariable(normalizedKey) is null)
+            {
+                Environment.SetEnvironmentVariable(normalizedKey, value);
+            }
         }
     }
 
@@ -57,7 +62,8 @@ public static class EnvFile
         var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 
-        return string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase)
+        return string.IsNullOrEmpty(environmentName)
+            || string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase)
             || string.Equals(environmentName, "Test", StringComparison.OrdinalIgnoreCase)
             || string.Equals(
                 Environment.GetEnvironmentVariable("RFC_LOAD_DOTENV"),

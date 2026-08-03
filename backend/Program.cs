@@ -22,7 +22,9 @@ EnvFile.LoadFromCommonLocations();
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["ASPNETCORE_URLS"] ?? "http://localhost:5242");
 
-var isDevelopment = builder.Environment.IsDevelopment();
+var isDevelopment = builder.Environment.IsDevelopment() ||
+                    string.Equals(builder.Configuration["ASPNETCORE_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(builder.Configuration["DOTNET_ENVIRONMENT"], "Development", StringComparison.OrdinalIgnoreCase);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 ValidateProductionConfiguration(builder, isDevelopment || isTesting);
 
@@ -149,6 +151,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<OrderAccessService>();
 builder.Services.AddScoped<OrderPricingService>();
 builder.Services.AddScoped<IPaymentGateway, StripePaymentGateway>();

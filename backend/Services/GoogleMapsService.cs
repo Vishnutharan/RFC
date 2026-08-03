@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace RFC.Api.Services;
 
@@ -9,12 +10,14 @@ public sealed class GoogleMapsService
 
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<GoogleMapsService> _logger;
 
-    public GoogleMapsService(HttpClient httpClient, IConfiguration configuration, ILogger<GoogleMapsService> logger)
+    public GoogleMapsService(HttpClient httpClient, IConfiguration configuration, IMemoryCache cache, ILogger<GoogleMapsService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -52,6 +55,12 @@ public sealed class GoogleMapsService
         var apiKey = _configuration["GoogleMaps:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey)) return null;
 
+        var cacheKey = $"eta_{Math.Round(destinationLat, 4)}_{Math.Round(destinationLng, 4)}";
+        if (_cache.TryGetValue<int>(cacheKey, out var cachedEta))
+        {
+            return cachedEta;
+        }
+
         try
         {
             var url = "https://maps.googleapis.com/maps/api/distancematrix/json" +
@@ -69,7 +78,10 @@ public sealed class GoogleMapsService
             if (element.GetProperty("status").GetString() != "OK") return null;
 
             var seconds = element.GetProperty("duration").GetProperty("value").GetInt32();
-            return Math.Max(1, (int)Math.Ceiling(seconds / 60m));
+            var etaMinutes = Math.Max(1, (int)Math.Ceiling(seconds / 60m));
+
+            _cache.Set(cacheKey, etaMinutes, TimeSpan.FromMinutes(3));
+            return etaMinutes;
         }
         catch (Exception ex)
         {
@@ -80,3 +92,4 @@ public sealed class GoogleMapsService
 }
 
 public sealed record GeoPoint(decimal Lat, decimal Lng);
+

@@ -106,8 +106,8 @@ export default function MenuItemCard({ item, onSelectItem, index = 0 }) {
         </div>
 
         <div className="card-footer">
-          <span className="card-price" style={{ fontFamily: 'var(--font-head)', color: 'var(--red)', fontWeight: 900, fontSize: '1.15rem' }}>
-            GBP {price.toFixed(2)}
+          <span className="card-price" style={{ fontFamily: 'var(--font-head)', color: 'var(--red)', fontWeight: 900, fontSize: '1.25rem' }}>
+            £{price.toFixed(2)}
           </span>
           <button
             className="btn-add-item"
