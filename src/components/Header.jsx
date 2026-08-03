@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame, ShieldCheck } from 'lucide-react';
+import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame, ShieldCheck, UtensilsCrossed, Tag, Clock, Star } from 'lucide-react';
 
 const navLinks = [
-  { label: 'Menu', href: '#menu' },
-  { label: 'Deals', href: '#deals' },
-  { label: 'Track Order', href: '#track-order' },
-  { label: 'Reviews', href: '#reviews' }
+  { label: 'Menu', href: '#menu', icon: UtensilsCrossed },
+  { label: 'Deals', href: '#deals', icon: Tag },
+  { label: 'Track Order', href: '#track-order', icon: Clock },
+  { label: 'Reviews', href: '#reviews', icon: Star }
 ];
 
 export default function Header({
@@ -85,9 +85,15 @@ export default function Header({
           {!isAdminView && (
             <div className="header-center">
               <nav className="header-pill-nav" aria-label="Primary">
-                {navLinks.map((link) => (
-                  <a key={link.href} href={link.href}>{link.label}</a>
-                ))}
+                {navLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <a key={link.href} href={link.href} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Icon size={14} color="var(--red)" />
+                      <span>{link.label}</span>
+                    </a>
+                  );
+                })}
               </nav>
             </div>
           )}
@@ -101,7 +107,7 @@ export default function Header({
                     type="button"
                     onClick={() => setOrderMode('delivery')}
                   >
-                    <Truck size={16} />
+                    <Truck size={15} />
                     <span>Delivery</span>
                   </button>
                   <button
@@ -109,13 +115,13 @@ export default function Header({
                     type="button"
                     onClick={() => setOrderMode('collection')}
                   >
-                    <Store size={16} />
+                    <Store size={15} />
                     <span>Collect</span>
                   </button>
                 </div>
 
                 <label className="search-container">
-                  <Search className="search-icon" size={18} />
+                  <Search className="search-icon" size={17} />
                   <span className="sr-only">Search menu</span>
                   <input
                     type="text"
@@ -132,7 +138,7 @@ export default function Header({
                   onClick={onOpenCustomerDashboard}
                   aria-label="Open account"
                 >
-                  <User size={18} />
+                  <User size={17} />
                   <span className="account-btn-label">Account</span>
                 </button>
 
@@ -142,7 +148,7 @@ export default function Header({
                   onClick={onStaffPanelClick}
                   style={{ background: 'var(--red-light)', color: 'var(--red)', borderColor: 'var(--red-glow)', fontWeight: 800 }}
                 >
-                  <ShieldCheck size={18} />
+                  <ShieldCheck size={17} />
                   <span className="account-btn-label">{adminLabel}</span>
                 </button>
               </>
@@ -178,17 +184,21 @@ export default function Header({
             </button>
           </div>
           <nav className="modal-body">
-            {navLinks.map((link, index) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="dashboard-tab"
-                style={{ animationDelay: `${index * 55}ms` }}
-                onClick={() => setMobileOpen(false)}
-              >
-                {link.label}
-              </a>
-            ))}
+            {navLinks.map((link, index) => {
+              const Icon = link.icon;
+              return (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="dashboard-tab"
+                  style={{ animationDelay: `${index * 55}ms`, display: 'flex', alignItems: 'center', gap: '8px' }}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <Icon size={16} color="var(--red)" />
+                  <span>{link.label}</span>
+                </a>
+              );
+            })}
             <button
               className="dashboard-tab"
               type="button"
@@ -196,9 +206,10 @@ export default function Header({
                 setMobileOpen(false);
                 onStaffPanelClick();
               }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
-              <ShieldCheck size={18} style={{ marginRight: 6 }} />
-              {adminLabel}
+              <ShieldCheck size={16} color="var(--red)" />
+              <span>{adminLabel}</span>
             </button>
           </nav>
         </div>
