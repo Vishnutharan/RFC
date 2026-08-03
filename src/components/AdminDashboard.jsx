@@ -3,7 +3,8 @@ import {
   ShoppingBag, TrendingUp, DollarSign, Clock, RefreshCw, Download, 
   CheckCircle, Truck, AlertTriangle, ChevronRight, Search, Printer, 
   Calendar, Star, MessageSquare, Flame, Plus, Edit2, Trash2, Package, 
-  Settings, Users, Shield, UserCheck, ToggleLeft, ToggleRight, X, Eye, Save
+  Settings, Users, Shield, UserCheck, ToggleLeft, ToggleRight, X, Eye, Save,
+  Ban, CornerUpLeft
 } from 'lucide-react';
 import { 
   getAdminOrders, updateOrderStatus, getMenuItems, createAdminMenuItem, 
@@ -14,13 +15,34 @@ import { CATEGORIES, MENU_ITEMS } from '../data/initialMenu';
 import PrintReceiptModal from './PrintReceiptModal';
 import ReviewsManager from './ReviewsManager';
 
+const DEMO_ORDERS = [
+  { id: '1001', orderNumber: '1001', customerName: 'Alice Smith', customerPhone: '+44 7700 900111', deliveryAddress: '10 Main St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Placed', total: 25.50, items: [{name: 'Boneless Banquet', quantity: 1, price: 8.99}, {name: 'Hot Wings', quantity: 2, price: 4.50}], createdAt: '2026-08-03T12:30:00Z' },
+  { id: '1002', orderNumber: '1002', customerName: 'Bob Jones', customerPhone: '+44 7700 900222', deliveryAddress: '15 High St, Watford', orderType: 'collection', paymentMethod: 'CASH', orderStatus: 'Preparing', total: 18.00, items: [{name: 'Family Bucket', quantity: 1, price: 18.00}], createdAt: '2026-08-03T12:45:00Z' },
+  { id: '1003', orderNumber: '1003', customerName: 'Charlie Brown', customerPhone: '+44 7700 900333', deliveryAddress: '20 Market St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 45.20, items: [{name: 'Party Platter', quantity: 2, price: 20.00}], createdAt: '2026-08-03T11:15:00Z' },
+  { id: '1004', orderNumber: '1004', customerName: 'David Lee', customerPhone: '+44 7700 900444', deliveryAddress: '5 Park Ave, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Refunded', refundAmount: 15.00, refundReason: 'Late delivery', total: 15.00, items: [{name: 'Zinger Burger Meal', quantity: 2, price: 7.50}], createdAt: '2026-08-02T18:30:00Z' },
+  { id: '1005', orderNumber: '1005', customerName: 'Eva Green', customerPhone: '+44 7700 900555', deliveryAddress: '8 Elm Rd, Watford', orderType: 'collection', paymentMethod: 'CARD', orderStatus: 'Cancelled', cancellationReason: 'Customer request', total: 22.00, items: [{name: 'Veggie Wrap', quantity: 2, price: 11.00}], createdAt: '2026-08-02T19:00:00Z' },
+  { id: '1006', orderNumber: '1006', customerName: 'Frank White', customerPhone: '+44 7700 900666', deliveryAddress: '12 Oak St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 30.00, items: [{name: 'Chicken Tenders', quantity: 3, price: 10.00}], createdAt: '2026-07-25T14:00:00Z' }
+];
+
 export default function AdminDashboard({ showToast }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('kanban'); // 'kanban', 'menu_editor', 'daily_sales', 'store_settings', 'staff_manager', 'customer_manager', 'reviews'
+  const [activeTab, setActiveTab] = useState('kanban'); // 'kanban', 'menu_editor', 'sales_reports', 'orders_ledger', 'store_settings', 'staff_manager', 'customer_manager', 'reviews'
   const [printModalOrder, setPrintModalOrder] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Modals for Refund & Cancel
+  const [refundModalState, setRefundModalState] = useState({ isOpen: false, order: null, amount: '', reason: '' });
+  const [cancelModalState, setCancelModalState] = useState({ isOpen: false, order: null, reason: '' });
+
+  // Sales Reports State
+  const [reportType, setReportType] = useState('daily'); // 'daily', 'monthly'
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+
+  // Orders Ledger State
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerFilter, setLedgerFilter] = useState('All');
 
   // Product & Menu Management state
   const [products, setProducts] = useState(MENU_ITEMS);
@@ -65,13 +87,17 @@ export default function AdminDashboard({ showToast }) {
         getMenuItems()
       ]);
 
-      if (orderData.status === 'fulfilled' && Array.isArray(orderData.value)) {
+      if (orderData.status === 'fulfilled' && Array.isArray(orderData.value) && orderData.value.length > 0) {
         setOrders(orderData.value);
+      } else {
+        if (orders.length === 0) setOrders(DEMO_ORDERS);
       }
+
       if (menuData.status === 'fulfilled' && Array.isArray(menuData.value) && menuData.value.length > 0) {
         setProducts(menuData.value);
       }
     } catch (e) {
+      if (orders.length === 0) setOrders(DEMO_ORDERS);
       console.warn('Backend load failed, using local fallback state');
     } finally {
       setLoading(false);
@@ -96,11 +122,29 @@ export default function AdminDashboard({ showToast }) {
     }
   };
 
-  // KPIs
-  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + (o.total || 0), 0), [orders]);
-  const totalOrdersCount = orders.length;
+  const handleRefundSubmit = (e) => {
+    e.preventDefault();
+    const { order, amount, reason } = refundModalState;
+    if (!order || !amount || !reason) return;
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'Refunded', refundAmount: parseFloat(amount), refundReason: reason } : o));
+    showToast?.(`Refund of £${amount} issued for Order #${order.orderNumber}`);
+    setRefundModalState({ isOpen: false, order: null, amount: '', reason: '' });
+  };
+
+  const handleCancelSubmit = (e) => {
+    e.preventDefault();
+    const { order, reason } = cancelModalState;
+    if (!order || !reason) return;
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'Cancelled', cancellationReason: reason } : o));
+    showToast?.(`Order #${order.orderNumber} Cancelled`);
+    setCancelModalState({ isOpen: false, order: null, reason: '' });
+  };
+
+  // KPIs (Global)
+  const nonCancelledOrders = orders.filter(o => o.orderStatus !== 'Cancelled' && o.orderStatus !== 'Refunded');
+  const globalTotalRevenue = nonCancelledOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const globalTotalOrdersCount = orders.length;
   const activeKitchenCount = useMemo(() => orders.filter(o => o.orderStatus === 'Placed' || o.orderStatus === 'Preparing').length, [orders]);
-  const avgOrderValue = totalOrdersCount > 0 ? totalRevenue / totalOrdersCount : 0;
 
   // Kanban Columns
   const kanbanColumns = [
@@ -110,7 +154,6 @@ export default function AdminDashboard({ showToast }) {
     { id: 'Completed', title: '🟢 Completed', bg: '#ECFDF5', color: '#047857' },
   ];
 
-  // Filtered Orders for Search
   const filteredOrders = useMemo(() => {
     if (!searchQuery) return orders;
     const q = searchQuery.toLowerCase();
@@ -121,16 +164,67 @@ export default function AdminDashboard({ showToast }) {
     );
   }, [orders, searchQuery]);
 
-  // Daily Sales Filtering
+  // Daily Sales Logic
   const dailySalesOrders = useMemo(() => {
     return orders.filter(o => {
-      if (!o.createdAt && !o.orderTime) return true;
+      if (!o.createdAt && !o.orderTime) return false;
       const d = o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : '';
-      return d === selectedDate || !d;
+      return d === selectedDate;
     });
   }, [orders, selectedDate]);
 
-  const dailyRevenue = useMemo(() => dailySalesOrders.reduce((s, o) => s + (o.total || 0), 0), [dailySalesOrders]);
+  const dailyGross = dailySalesOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const dailyRefunds = dailySalesOrders.filter(o => o.orderStatus === 'Refunded').reduce((s, o) => s + (o.refundAmount || 0), 0);
+  const dailyNet = dailyGross - dailyRefunds;
+  const dailyCompleted = dailySalesOrders.filter(o => o.orderStatus === 'Completed').length;
+  const dailyCompletedRate = dailySalesOrders.length ? ((dailyCompleted / dailySalesOrders.length) * 100).toFixed(1) : 0;
+  const dailyAov = dailySalesOrders.length ? (dailyGross / dailySalesOrders.length).toFixed(2) : 0;
+
+  // Monthly Sales Logic
+  const monthlySalesOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (!o.createdAt) return false;
+      const m = new Date(o.createdAt).toISOString().slice(0,7);
+      return m === selectedMonth;
+    });
+  }, [orders, selectedMonth]);
+
+  const monthlyGross = monthlySalesOrders.reduce((s, o) => s + (o.total || 0), 0);
+  const monthlyRefunds = monthlySalesOrders.filter(o => o.orderStatus === 'Refunded').reduce((s, o) => s + (o.refundAmount || 0), 0);
+  const monthlyNet = monthlyGross - monthlyRefunds;
+  const monthlyAov = monthlySalesOrders.length ? (monthlyGross / monthlySalesOrders.length).toFixed(2) : 0;
+
+  // Monthly Day-by-Day Aggregation
+  const monthlyDays = useMemo(() => {
+    const days = {};
+    monthlySalesOrders.forEach(o => {
+      const d = new Date(o.createdAt).toISOString().split('T')[0];
+      if (!days[d]) days[d] = { date: d, orders: 0, gross: 0, refunds: 0, net: 0 };
+      days[d].orders += 1;
+      days[d].gross += (o.total || 0);
+      if (o.orderStatus === 'Refunded') days[d].refunds += (o.refundAmount || 0);
+      days[d].net = days[d].gross - days[d].refunds;
+    });
+    return Object.values(days).sort((a,b) => a.date.localeCompare(b.date));
+  }, [monthlySalesOrders]);
+
+  // Ledger Filter
+  const ledgerOrders = useMemo(() => {
+    let res = orders;
+    if (ledgerFilter !== 'All') {
+      res = res.filter(o => o.orderStatus === ledgerFilter);
+    }
+    if (ledgerSearch) {
+      const q = ledgerSearch.toLowerCase();
+      res = res.filter(o => 
+        (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
+        (o.customerName && o.customerName.toLowerCase().includes(q)) ||
+        (o.customerPhone && o.customerPhone.includes(q))
+      );
+    }
+    return res.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [orders, ledgerSearch, ledgerFilter]);
+
 
   // Product Filter Logic
   const filteredProducts = useMemo(() => {
@@ -141,11 +235,9 @@ export default function AdminDashboard({ showToast }) {
     });
   }, [products, selectedCategory, productSearch]);
 
-  // Product Stock Toggle
   const handleToggleStock = async (product) => {
     const newStock = Number(product.stockQuantity || 99) === 0 ? 99 : 0;
     const updated = { ...product, stockQuantity: newStock };
-    
     setProducts(prev => prev.map(p => p.id === product.id ? updated : p));
     try {
       await updateAdminMenuItem(product.id, updated);
@@ -155,10 +247,8 @@ export default function AdminDashboard({ showToast }) {
     }
   };
 
-  // Product Delete / Archive
   const handleArchiveProduct = async (productId, productName) => {
     if (!window.confirm(`Are you sure you want to remove "${productName}" from the store menu?`)) return;
-    
     setProducts(prev => prev.filter(p => p.id !== productId));
     try {
       await archiveAdminMenuItem(productId);
@@ -168,7 +258,6 @@ export default function AdminDashboard({ showToast }) {
     }
   };
 
-  // Save / Add Product Submit
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -206,12 +295,10 @@ export default function AdminDashboard({ showToast }) {
         showToast?.(`Added ${productPayload.name} to menu`);
       }
     }
-
     setIsProductModalOpen(false);
     setEditingProduct(null);
   };
 
-  // Add Staff Submit
   const handleAddStaff = (e) => {
     e.preventDefault();
     if (!newStaff.name || !newStaff.email) return;
@@ -227,30 +314,26 @@ export default function AdminDashboard({ showToast }) {
     showToast?.(`Added staff member ${staffEntry.name}`);
   };
 
-  // Store Settings Save
   const handleSaveSettings = (e) => {
     e.preventDefault();
     showToast?.('Store operational settings saved successfully!');
   };
 
-  const exportCSV = () => {
-    if (orders.length === 0) return;
-    const headers = ['Order Number', 'Date/Time', 'Customer', 'Phone', 'Type', 'Status', 'Payment', 'Total (£)'];
-    const rows = orders.map(o => [
-      o.orderNumber,
-      `"${o.orderTime || o.createdAt}"`,
-      `"${o.customerName}"`,
-      `"${o.customerPhone}"`,
-      o.orderType,
-      o.orderStatus,
-      o.paymentMethod,
-      o.total
+  const exportMonthlyCSV = () => {
+    if (monthlyDays.length === 0) return;
+    const headers = ['Date', 'Orders', 'Gross Revenue', 'Refunds', 'Net Revenue'];
+    const rows = monthlyDays.map(d => [
+      d.date,
+      d.orders,
+      d.gross.toFixed(2),
+      d.refunds.toFixed(2),
+      d.net.toFixed(2)
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `RFC_Orders_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `RFC_Monthly_Financials_${selectedMonth}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -258,7 +341,6 @@ export default function AdminDashboard({ showToast }) {
 
   return (
     <div className="admin-container">
-      
       {/* Header Bar */}
       <div className="admin-header">
         <div>
@@ -278,7 +360,7 @@ export default function AdminDashboard({ showToast }) {
           <div className="search-container" style={{ width: '200px' }}>
             <Search size={16} />
             <input
-              placeholder="Search orders..."
+              placeholder="Search global..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input"
@@ -288,57 +370,20 @@ export default function AdminDashboard({ showToast }) {
           <button onClick={fetchData} className="mode-btn" style={{ background: '#FFF', border: '1px solid var(--border)' }}>
             <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
           </button>
-          <button onClick={exportCSV} className="btn-add-item" style={{ padding: '8px 16px' }}>
-            <Download size={16} /> Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Metric Cards */}
-      <div className="admin-metrics">
-        <div className="metric-card">
-          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Revenue</span>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--red)' }}>£{totalRevenue.toFixed(2)}</span>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--red-light)', color: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><DollarSign size={20} /></div>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Orders</span>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem' }}>{totalOrdersCount}</span>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EEF2FF', color: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={20} /></div>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Active Kitchen Queue</span>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--amber)' }}>{activeKitchenCount}</span>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--amber-light)', color: 'var(--amber)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Clock size={20} /></div>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Avg Ticket Value (AOV)</span>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--green)' }}>£{avgOrderValue.toFixed(2)}</span>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--green-light)', color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><TrendingUp size={20} /></div>
-          </div>
         </div>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '10px', marginBottom: '20px', overflowX: 'auto' }}>
         {[
-          { id: 'kanban', label: '📋 Kitchen Kanban', count: activeKitchenCount },
+          { id: 'kanban', label: '📋 Live Kitchen Kanban', count: activeKitchenCount },
           { id: 'menu_editor', label: '🍔 Menu & Product Management', count: products.length },
-          { id: 'daily_sales', label: '📅 Daily Sales', count: '' },
-          { id: 'store_settings', label: '⚙️ Store Settings', count: '' },
+          { id: 'sales_reports', label: '📊 Sales Reports (Daily & Monthly)', count: '' },
+          { id: 'orders_ledger', label: '📑 All Orders & Refunds Ledger', count: '' },
+          { id: 'store_settings', label: '⚙️ Store Operational Settings', count: '' },
           { id: 'staff_manager', label: '👥 Staff Management', count: staffList.length },
-          { id: 'customer_manager', label: '👤 Customers', count: customersList.length },
-          { id: 'reviews', label: '⭐ Customer Reviews', count: '' },
+          { id: 'customer_manager', label: '👤 Customer Directory', count: customersList.length },
+          { id: 'reviews', label: '⭐ Reviews & Complaints', count: '' },
         ].map(t => (
           <button
             key={t.id}
@@ -358,7 +403,7 @@ export default function AdminDashboard({ showToast }) {
         ))}
       </div>
 
-      {/* TAB 1: LIVE KITCHEN KANBAN BOARD */}
+      {/* TAB: KANBAN */}
       {activeTab === 'kanban' && (
         <div className="kanban-board">
           {kanbanColumns.map(col => {
@@ -433,7 +478,7 @@ export default function AdminDashboard({ showToast }) {
         </div>
       )}
 
-      {/* TAB 2: MENU & PRODUCT MANAGEMENT (ADD / EDIT / TOGGLE STOCK) */}
+      {/* TAB: MENU & PRODUCT MANAGEMENT */}
       {activeTab === 'menu_editor' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
@@ -528,66 +573,222 @@ export default function AdminDashboard({ showToast }) {
         </div>
       )}
 
-      {/* TAB 3: DAILY SALES INSPECTOR */}
-      {activeTab === 'daily_sales' && (
-        <div style={{ background: '#FFF', padding: '20px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+      {/* TAB: SALES REPORTS (DAILY & MONTHLY) */}
+      {activeTab === 'sales_reports' && (
+        <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+          
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+            <button onClick={() => setReportType('daily')} className="btn-submit-modal" style={{ background: reportType === 'daily' ? 'var(--red)' : '#F1F5F9', color: reportType === 'daily' ? '#FFF' : 'var(--text)', width: 'auto' }}>📅 Daily Sales Report</button>
+            <button onClick={() => setReportType('monthly')} className="btn-submit-modal" style={{ background: reportType === 'monthly' ? 'var(--indigo)' : '#F1F5F9', color: reportType === 'monthly' ? '#FFF' : 'var(--text)', width: 'auto' }}>📆 Monthly Financial Report</button>
+          </div>
+
+          {reportType === 'daily' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3>Daily Sales Summary</h3>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontWeight: 700 }}
+                />
+              </div>
+
+              <div className="admin-metrics">
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Gross Revenue</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--red)' }}>£{dailyGross.toFixed(2)}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Net Revenue (After Refunds)</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--green)' }}>£{dailyNet.toFixed(2)}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Orders</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--text)' }}>{dailySalesOrders.length}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Completed Rate</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--text)' }}>{dailyCompletedRate}%</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Refunds</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--amber)' }}>£{dailyRefunds.toFixed(2)}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Avg Order Value (AOV)</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--indigo)' }}>£{dailyAov}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {reportType === 'monthly' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3>Monthly Financial Report</h3>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontWeight: 700 }}
+                  />
+                  <button onClick={exportMonthlyCSV} className="btn-add-item" style={{ padding: '8px 16px' }}>
+                    <Download size={16} /> Export CSV
+                  </button>
+                </div>
+              </div>
+
+              <div className="admin-metrics" style={{ marginBottom: '20px' }}>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Gross Revenue</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--red)' }}>£{monthlyGross.toFixed(2)}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Net Revenue</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--green)' }}>£{monthlyNet.toFixed(2)}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Orders</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--text)' }}>{monthlySalesOrders.length}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Refunds Issued</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--amber)' }}>£{monthlyRefunds.toFixed(2)}</div>
+                </div>
+                <div className="metric-card">
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Avg Ticket Value (AOV)</span>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--indigo)' }}>£{monthlyAov}</div>
+                </div>
+              </div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-alt)', borderBottom: '2px solid var(--border)' }}>
+                    <th style={{ padding: '12px' }}>Date</th>
+                    <th style={{ padding: '12px' }}>Total Orders</th>
+                    <th style={{ padding: '12px' }}>Gross Sales</th>
+                    <th style={{ padding: '12px' }}>Refunds</th>
+                    <th style={{ padding: '12px' }}>Net Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyDays.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center' }}>No data for selected month.</td></tr>
+                  ) : (
+                    monthlyDays.map((d, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '12px', fontWeight: 700 }}>{d.date}</td>
+                        <td style={{ padding: '12px' }}>{d.orders}</td>
+                        <td style={{ padding: '12px' }}>£{d.gross.toFixed(2)}</td>
+                        <td style={{ padding: '12px', color: 'var(--amber)' }}>£{d.refunds.toFixed(2)}</td>
+                        <td style={{ padding: '12px', fontWeight: 900, color: 'var(--green)' }}>£{d.net.toFixed(2)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: ALL ORDERS & REFUNDS LEDGER */}
+      {activeTab === 'orders_ledger' && (
+        <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <h3>Daily Sales & Transaction Inspector</h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Detailed ledger of store revenue and orders</p>
+              <h3>All Orders & Refunds Ledger</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Manage every order, issue refunds, and process cancellations.</p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                style={{ padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontWeight: 700 }}
-              />
-              <span style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--red)' }}>Daily Total: £{dailyRevenue.toFixed(2)}</span>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div className="search-container" style={{ width: '200px' }}>
+                <Search size={16} />
+                <input placeholder="Search by order #, name, phone..." value={ledgerSearch} onChange={(e) => setLedgerSearch(e.target.value)} className="search-input" />
+              </div>
+              <select value={ledgerFilter} onChange={(e) => setLedgerFilter(e.target.value)} style={{ padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontWeight: 700 }}>
+                <option value="All">All Statuses</option>
+                <option value="Placed">Placed</option>
+                <option value="Preparing">Preparing</option>
+                <option value="Out for Delivery">Out for Delivery</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Refunded">Refunded</option>
+              </select>
             </div>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ background: 'var(--surface-alt)', borderBottom: '2px solid var(--border)' }}>
-                <th style={{ padding: '12px' }}>Order #</th>
-                <th style={{ padding: '12px' }}>Time</th>
-                <th style={{ padding: '12px' }}>Customer</th>
-                <th style={{ padding: '12px' }}>Type</th>
-                <th style={{ padding: '12px' }}>Payment</th>
-                <th style={{ padding: '12px' }}>Status</th>
-                <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dailySalesOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: 'var(--text3)' }}>No sales transactions found for {selectedDate}</td>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-alt)', borderBottom: '2px solid var(--border)' }}>
+                  <th style={{ padding: '12px' }}>Order # & Time</th>
+                  <th style={{ padding: '12px' }}>Customer Details</th>
+                  <th style={{ padding: '12px' }}>Type & Payment</th>
+                  <th style={{ padding: '12px' }}>Items Summary</th>
+                  <th style={{ padding: '12px' }}>Status</th>
+                  <th style={{ padding: '12px' }}>Total (£)</th>
+                  <th style={{ padding: '12px' }}>Actions</th>
                 </tr>
-              ) : (
-                dailySalesOrders.map((o, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '12px', fontWeight: 800, color: 'var(--red)' }}>#{o.orderNumber}</td>
-                    <td style={{ padding: '12px' }}>{o.orderTime || new Date(o.createdAt).toLocaleTimeString()}</td>
-                    <td style={{ padding: '12px' }}><strong>{o.customerName}</strong> ({o.customerPhone})</td>
-                    <td style={{ padding: '12px' }}>{o.orderType?.toUpperCase()}</td>
-                    <td style={{ padding: '12px' }}>{o.paymentMethod || 'CARD'}</td>
+              </thead>
+              <tbody>
+                {ledgerOrders.map((o) => (
+                  <tr key={o.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ fontWeight: 800, color: 'var(--red)' }}>#{o.orderNumber}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{o.orderTime || new Date(o.createdAt).toLocaleString()}</div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <strong>{o.customerName}</strong><br/>
+                      <span style={{ color: 'var(--text2)' }}>{o.customerPhone}</span><br/>
+                      {o.deliveryAddress && <span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{o.deliveryAddress}</span>}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <span style={{ fontWeight: 700, textTransform: 'uppercase' }}>{o.orderType}</span><br/>
+                      <span style={{ fontSize: '0.75rem' }}>{o.paymentMethod || 'CARD'}</span>
+                    </td>
+                    <td style={{ padding: '12px', fontSize: '0.75rem' }}>
+                      {o.items?.map((item, idx) => <div key={idx}>{item.quantity}x {item.name || item.item?.name}</div>)}
+                    </td>
                     <td style={{ padding: '12px' }}>
                       <span className={`status-badge status-${(o.orderStatus || 'placed').toLowerCase().replace(/\s+/g, '')}`}>
                         {o.orderStatus}
                       </span>
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 900 }}>£{o.total?.toFixed(2)}</td>
+                    <td style={{ padding: '12px', fontWeight: 900 }}>
+                      £{o.total?.toFixed(2)}
+                      {o.orderStatus === 'Refunded' && o.refundAmount && (
+                        <div style={{ color: 'var(--amber)', fontSize: '0.75rem', fontWeight: 700 }}>-£{o.refundAmount.toFixed(2)} Refunded</div>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button onClick={() => setPrintModalOrder(o)} className="mode-btn" style={{ background: '#F1F5F9', padding: '6px', borderRadius: 'var(--radius-xs)' }} title="Print Docket">
+                          <Printer size={16} />
+                        </button>
+                        {o.orderStatus !== 'Refunded' && o.orderStatus !== 'Cancelled' && (
+                          <>
+                            <button onClick={() => setRefundModalState({ isOpen: true, order: o, amount: '', reason: '' })} className="mode-btn" style={{ background: '#FEF3C7', color: '#B45309', padding: '6px', borderRadius: 'var(--radius-xs)' }} title="Issue Refund">
+                              <CornerUpLeft size={16} />
+                            </button>
+                            <button onClick={() => setCancelModalState({ isOpen: true, order: o, reason: '' })} className="mode-btn" style={{ background: '#FEF2F2', color: '#B91C1C', padding: '6px', borderRadius: 'var(--radius-xs)' }} title="Cancel Order">
+                              <Ban size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* TAB 4: STORE SETTINGS & OPS */}
+      {/* TAB: STORE SETTINGS & OPS */}
       {activeTab === 'store_settings' && (
         <div style={{ maxWidth: '680px', background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
           <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: 8 }}><Settings size={20} /> Store Operational Controls</h3>
@@ -611,63 +812,30 @@ export default function AdminDashboard({ showToast }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Delivery Fee (£)</label>
-                <input 
-                  type="number" step="0.5" 
-                  value={storeSettings.deliveryFee} 
-                  onChange={(e) => setStoreSettings({ ...storeSettings, deliveryFee: parseFloat(e.target.value) })}
-                  className="input-group" style={{ width: '100%', marginTop: '4px' }} 
-                />
+                <input type="number" step="0.5" value={storeSettings.deliveryFee} onChange={(e) => setStoreSettings({ ...storeSettings, deliveryFee: parseFloat(e.target.value) })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Free Delivery Over (£)</label>
-                <input 
-                  type="number" step="1" 
-                  value={storeSettings.freeDeliveryThreshold} 
-                  onChange={(e) => setStoreSettings({ ...storeSettings, freeDeliveryThreshold: parseFloat(e.target.value) })}
-                  className="input-group" style={{ width: '100%', marginTop: '4px' }} 
-                />
+                <input type="number" step="1" value={storeSettings.freeDeliveryThreshold} onChange={(e) => setStoreSettings({ ...storeSettings, freeDeliveryThreshold: parseFloat(e.target.value) })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Min Delivery Spend (£)</label>
-                <input 
-                  type="number" step="1" 
-                  value={storeSettings.minSpend} 
-                  onChange={(e) => setStoreSettings({ ...storeSettings, minSpend: parseFloat(e.target.value) })}
-                  className="input-group" style={{ width: '100%', marginTop: '4px' }} 
-                />
+                <input type="number" step="1" value={storeSettings.minSpend} onChange={(e) => setStoreSettings({ ...storeSettings, minSpend: parseFloat(e.target.value) })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Store Phone</label>
-                <input 
-                  type="text" 
-                  value={storeSettings.phone} 
-                  onChange={(e) => setStoreSettings({ ...storeSettings, phone: e.target.value })}
-                  className="input-group" style={{ width: '100%', marginTop: '4px' }} 
-                />
+                <input type="text" value={storeSettings.phone} onChange={(e) => setStoreSettings({ ...storeSettings, phone: e.target.value })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
               </div>
             </div>
 
             <div>
               <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Store Address</label>
-              <input 
-                type="text" 
-                value={storeSettings.address} 
-                onChange={(e) => setStoreSettings({ ...storeSettings, address: e.target.value })}
-                className="input-group" style={{ width: '100%', marginTop: '4px' }} 
-              />
+              <input type="text" value={storeSettings.address} onChange={(e) => setStoreSettings({ ...storeSettings, address: e.target.value })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
             </div>
 
             <div>
               <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Operating Hours</label>
-              <input 
-                type="text" 
-                value={storeSettings.openingHours} 
-                onChange={(e) => setStoreSettings({ ...storeSettings, openingHours: e.target.value })}
-                className="input-group" style={{ width: '100%', marginTop: '4px' }} 
-              />
+              <input type="text" value={storeSettings.openingHours} onChange={(e) => setStoreSettings({ ...storeSettings, openingHours: e.target.value })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
             </div>
 
             <button type="submit" className="btn-submit-modal" style={{ marginTop: '10px' }}>
@@ -677,7 +845,7 @@ export default function AdminDashboard({ showToast }) {
         </div>
       )}
 
-      {/* TAB 5: STAFF MANAGEMENT */}
+      {/* TAB: STAFF MANAGEMENT */}
       {activeTab === 'staff_manager' && (
         <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -706,9 +874,7 @@ export default function AdminDashboard({ showToast }) {
                   <td style={{ padding: '12px', fontWeight: 800 }}>{s.name}</td>
                   <td style={{ padding: '12px' }}>{s.email}</td>
                   <td style={{ padding: '12px' }}>
-                    <span className="card-badge badge-bestseller" style={{ background: s.role.includes('Owner') ? 'var(--red)' : 'var(--indigo)' }}>
-                      {s.role}
-                    </span>
+                    <span className="card-badge badge-bestseller" style={{ background: s.role.includes('Owner') ? 'var(--red)' : 'var(--indigo)' }}>{s.role}</span>
                   </td>
                   <td style={{ padding: '12px' }}><span className="status-badge status-completed">{s.status}</span></td>
                   <td style={{ padding: '12px', color: 'var(--text3)' }}>{s.joined}</td>
@@ -719,7 +885,7 @@ export default function AdminDashboard({ showToast }) {
         </div>
       )}
 
-      {/* TAB 6: CUSTOMERS DIRECTORY */}
+      {/* TAB: CUSTOMERS DIRECTORY */}
       {activeTab === 'customer_manager' && (
         <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
           <h3 style={{ marginBottom: '16px' }}>Registered Customers Directory</h3>
@@ -748,7 +914,7 @@ export default function AdminDashboard({ showToast }) {
         </div>
       )}
 
-      {/* TAB 7: REVIEWS & COMPLAINTS */}
+      {/* TAB: REVIEWS & COMPLAINTS */}
       {activeTab === 'reviews' && (
         <ReviewsManager isAdmin={true} showToast={showToast} />
       )}
@@ -767,7 +933,6 @@ export default function AdminDashboard({ showToast }) {
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Product Name</label>
                 <input name="name" defaultValue={editingProduct?.name || ''} required className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="e.g. Boneless Banquet Meal" />
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Category</label>
@@ -775,55 +940,38 @@ export default function AdminDashboard({ showToast }) {
                     {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
-
                 <div>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Price (£)</label>
                   <input name="price" type="number" step="0.01" defaultValue={editingProduct?.price || '8.99'} required className="input-group" style={{ width: '100%', marginTop: '4px' }} />
                 </div>
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Description</label>
                 <textarea name="description" defaultValue={editingProduct?.description || ''} className="notes-input" style={{ width: '100%', marginTop: '4px' }} placeholder="Describe ingredients, sides included, etc." />
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Calorie Info</label>
                   <input name="calorieInfo" defaultValue={editingProduct?.calorieInfo || '850 kcal'} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
                 </div>
-
                 <div>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Stock Quantity</label>
                   <input name="stockQuantity" type="number" defaultValue={editingProduct?.stockQuantity ?? 99} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
                 </div>
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Image URL</label>
                 <input name="imageUrl" defaultValue={editingProduct?.imageUrl || ''} className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="https://images.unsplash.com/..." />
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--surface-alt)', padding: '10px', borderRadius: 'var(--radius-sm)' }}>
-                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" name="isBestseller" defaultChecked={editingProduct?.isBestseller} /> Bestseller Badge
-                </label>
-                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" name="isSpicy" defaultChecked={editingProduct?.isSpicy} /> Spicy Badge
-                </label>
-                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" name="isVegetarian" defaultChecked={editingProduct?.isVegetarian} /> Vegetarian
-                </label>
-                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" name="hasOptions" defaultChecked={editingProduct?.hasOptions ?? true} /> Side & Drink Choices
-                </label>
+                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="isBestseller" defaultChecked={editingProduct?.isBestseller} /> Bestseller Badge</label>
+                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="isSpicy" defaultChecked={editingProduct?.isSpicy} /> Spicy Badge</label>
+                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="isVegetarian" defaultChecked={editingProduct?.isVegetarian} /> Vegetarian</label>
+                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="hasOptions" defaultChecked={editingProduct?.hasOptions ?? true} /> Side & Drink Choices</label>
               </div>
-
               <div className="modal-footer" style={{ padding: 0, marginTop: '10px' }}>
                 <button type="button" className="btn-back" onClick={() => setIsProductModalOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-submit-modal" style={{ flex: 1 }}>
-                  {editingProduct ? 'Save Product Changes' : 'Create Product'}
-                </button>
+                <button type="submit" className="btn-submit-modal" style={{ flex: 1 }}>{editingProduct ? 'Save Product Changes' : 'Create Product'}</button>
               </div>
             </form>
           </div>
@@ -838,18 +986,15 @@ export default function AdminDashboard({ showToast }) {
               <h3>Add Staff Account</h3>
               <button className="close-btn" onClick={() => setIsStaffModalOpen(false)}><X size={18} /></button>
             </div>
-
             <form onSubmit={handleAddStaff} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Staff Name</label>
                 <input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value })} required className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="e.g. Alex Chef" />
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Email Address</label>
                 <input type="email" value={newStaff.email} onChange={e => setNewStaff({ ...newStaff, email: e.target.value })} required className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="staff@rfcwatford.com" />
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Role & Permissions</label>
                 <select value={newStaff.role} onChange={e => setNewStaff({ ...newStaff, role: e.target.value })} style={{ width: '100%', marginTop: '4px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
@@ -858,13 +1003,79 @@ export default function AdminDashboard({ showToast }) {
                   <option value="Store Manager">Store Manager (Full access)</option>
                 </select>
               </div>
-
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Initial Password</label>
                 <input type="password" value={newStaff.password} onChange={e => setNewStaff({ ...newStaff, password: e.target.value })} required minLength={6} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
               </div>
-
               <button type="submit" className="btn-submit-modal" style={{ marginTop: '10px' }}>Create Account</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REFUND ORDER */}
+      {refundModalState.isOpen && (
+        <div className="modal-overlay" onClick={() => setRefundModalState({ ...refundModalState, isOpen: false })}>
+          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ color: 'var(--amber)' }}>Issue Order Refund</h3>
+              <button className="close-btn" onClick={() => setRefundModalState({ ...refundModalState, isOpen: false })}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleRefundSubmit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
+                Refunding Order <strong>#{refundModalState.order?.orderNumber}</strong>.<br/>
+                Total Order Value: <strong>£{refundModalState.order?.total?.toFixed(2)}</strong>
+              </p>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Refund Amount (£)</label>
+                <input type="number" step="0.01" max={refundModalState.order?.total} value={refundModalState.amount} onChange={e => setRefundModalState({ ...refundModalState, amount: e.target.value })} required className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="0.00" />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Reason for Refund</label>
+                <select value={refundModalState.reason} onChange={e => setRefundModalState({ ...refundModalState, reason: e.target.value })} required style={{ width: '100%', marginTop: '4px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <option value="" disabled>Select a reason...</option>
+                  <option value="Customer cancellation">Customer cancellation</option>
+                  <option value="Missing item">Missing item</option>
+                  <option value="Late delivery">Late delivery</option>
+                  <option value="Quality complaint">Quality complaint</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="modal-footer" style={{ padding: 0, marginTop: '10px' }}>
+                <button type="button" className="btn-back" onClick={() => setRefundModalState({ ...refundModalState, isOpen: false })}>Cancel</button>
+                <button type="submit" className="btn-submit-modal" style={{ flex: 1, background: 'var(--amber)' }}>Process Refund</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CANCEL ORDER */}
+      {cancelModalState.isOpen && (
+        <div className="modal-overlay" onClick={() => setCancelModalState({ ...cancelModalState, isOpen: false })}>
+          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ color: 'var(--red)' }}>Cancel Order</h3>
+              <button className="close-btn" onClick={() => setCancelModalState({ ...cancelModalState, isOpen: false })}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCancelSubmit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
+                Are you sure you want to cancel Order <strong>#{cancelModalState.order?.orderNumber}</strong>?
+              </p>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Cancellation Reason</label>
+                <select value={cancelModalState.reason} onChange={e => setCancelModalState({ ...cancelModalState, reason: e.target.value })} required style={{ width: '100%', marginTop: '4px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <option value="" disabled>Select a reason...</option>
+                  <option value="Out of stock">Out of stock</option>
+                  <option value="Store closing">Store closing</option>
+                  <option value="Customer requested">Customer requested</option>
+                  <option value="Fraud suspected">Fraud suspected</option>
+                </select>
+              </div>
+              <div className="modal-footer" style={{ padding: 0, marginTop: '10px' }}>
+                <button type="button" className="btn-back" onClick={() => setCancelModalState({ ...cancelModalState, isOpen: false })}>Go Back</button>
+                <button type="submit" className="btn-submit-modal" style={{ flex: 1, background: 'var(--red)' }}>Confirm Cancel</button>
+              </div>
             </form>
           </div>
         </div>
