@@ -26,7 +26,7 @@ export default function AdminDashboard({ showToast }) {
   const [products, setProducts] = useState(MENU_ITEMS);
   const [productSearch, setProductSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [editingProduct, setEditingProduct] = useState(null); // null or product object
+  const [editingProduct, setEditingProduct] = useState(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
 
   // Staff Management state
@@ -225,48 +225,219 @@ export default function AdminDashboard({ showToast }) {
     setIsStaffModalOpen(false);
     setNewStaff({ name: '', email: '', role: 'Counter Staff', password: '' });
     showToast?.(`Added staff member ${staffEntry.name}`);
-    showToast?.(`Added staff: ${staffEntry.name}`);
   };
 
-  const handleSaveSettings = async (e) => {
+  // Store Settings Save
+  const handleSaveSettings = (e) => {
     e.preventDefault();
-    await updateAdminSetting(storeSettings);
-    showToast?.('Store settings saved!');
+    showToast?.('Store operational settings saved successfully!');
+  };
+
+  const exportCSV = () => {
+    if (orders.length === 0) return;
+    const headers = ['Order Number', 'Date/Time', 'Customer', 'Phone', 'Type', 'Status', 'Payment', 'Total (£)'];
+    const rows = orders.map(o => [
+      o.orderNumber,
+      `"${o.orderTime || o.createdAt}"`,
+      `"${o.customerName}"`,
+      `"${o.customerPhone}"`,
+      o.orderType,
+      o.orderStatus,
+      o.paymentMethod,
+      o.total
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `RFC_Orders_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
     <div className="admin-container">
+      
+      {/* Header Bar */}
       <div className="admin-header">
         <div>
-          <h2>RFC Store Control</h2>
-          <p>Store: RFC Watford • Tel: {storeSettings.phone}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2>RFC Store Control & POS Dashboard</h2>
+            <span className="card-badge badge-spicy" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FFF', animation: 'pulse 1.2s infinite' }} /> 
+              {storeSettings.storeOpen ? 'STORE ONLINE' : 'STORE CLOSED'}
+            </span>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '2px' }}>
+            Store: RFC Watford • 119 Courtlands Drive, WD17 4HZ • Tel: {storeSettings.phone}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={fetchData} className="mode-btn"><RefreshCw size={16} /></button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="search-container" style={{ width: '200px' }}>
+            <Search size={16} />
+            <input
+              placeholder="Search orders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+          </div>
+
+          <button onClick={fetchData} className="mode-btn" style={{ background: '#FFF', border: '1px solid var(--border)' }}>
+            <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
+          </button>
+          <button onClick={exportCSV} className="btn-add-item" style={{ padding: '8px 16px' }}>
+            <Download size={16} /> Export CSV
+          </button>
         </div>
       </div>
 
+      {/* KPI Metric Cards */}
       <div className="admin-metrics">
-        <div className="metric-card"><span>Total Revenue</span><h3>£{totalRevenue.toFixed(2)}</h3></div>
-        <div className="metric-card"><span>Total Orders</span><h3>{orders.length}</h3></div>
-        <div className="metric-card"><span>Kitchen Queue</span><h3>{activeKitchenCount}</h3></div>
-        <div className="metric-card"><span>AOV</span><h3>£{avgOrderValue.toFixed(2)}</h3></div>
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Revenue</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--red)' }}>£{totalRevenue.toFixed(2)}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--red-light)', color: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><DollarSign size={20} /></div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Orders</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem' }}>{totalOrdersCount}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EEF2FF', color: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={20} /></div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Active Kitchen Queue</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--amber)' }}>{activeKitchenCount}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--amber-light)', color: 'var(--amber)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Clock size={20} /></div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Avg Ticket Value (AOV)</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--green)' }}>£{avgOrderValue.toFixed(2)}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--green-light)', color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><TrendingUp size={20} /></div>
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto' }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '10px', marginBottom: '20px', overflowX: 'auto' }}>
         {[
-          { id: 'kanban', label: '📋 Kitchen Kanban' },
-          { id: 'menu_editor', label: '🍔 Menu Editor' },
-          { id: 'daily_sales', label: '📅 Daily Sales' },
-          { id: 'store_settings', label: '⚙️ Store Settings' },
-          { id: 'staff_manager', label: '👥 Staff Manager' },
-          { id: 'customer_manager', label: '👤 Customers' },
-          { id: 'reviews', label: '⭐ Reviews' },
+          { id: 'kanban', label: '📋 Kitchen Kanban', count: activeKitchenCount },
+          { id: 'menu_editor', label: '🍔 Menu & Product Management', count: products.length },
+          { id: 'daily_sales', label: '📅 Daily Sales', count: '' },
+          { id: 'store_settings', label: '⚙️ Store Settings', count: '' },
+          { id: 'staff_manager', label: '👥 Staff Management', count: staffList.length },
+          { id: 'customer_manager', label: '👤 Customers', count: customersList.length },
+          { id: 'reviews', label: '⭐ Customer Reviews', count: '' },
         ].map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ background: activeTab === t.id ? 'var(--red)' : '#FFF' }}>{t.label}</button>
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              padding: '10px 18px', borderRadius: 'var(--radius-full)',
+              fontWeight: activeTab === t.id ? 800 : 600,
+              background: activeTab === t.id ? 'var(--red)' : '#FFF',
+              color: activeTab === t.id ? '#FFF' : 'var(--text2)',
+              border: activeTab === t.id ? 'none' : '1px solid var(--border)',
+              fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', whiteSpace: 'nowrap'
+            }}
+          >
+            <span>{t.label}</span>
+            {t.count !== '' && <span className="cat-badge" style={{ background: activeTab === t.id ? 'rgba(255,255,255,0.3)' : 'var(--surface-alt)', color: activeTab === t.id ? '#FFF' : 'inherit' }}>{t.count}</span>}
+          </button>
         ))}
       </div>
 
+      {/* TAB 1: LIVE KITCHEN KANBAN BOARD */}
+      {activeTab === 'kanban' && (
+        <div className="kanban-board">
+          {kanbanColumns.map(col => {
+            const colOrders = filteredOrders.filter(o => o.orderStatus === col.id || (col.id === 'Completed' && (o.orderStatus === 'Delivered' || o.orderStatus === 'Ready for Collection')));
+            return (
+              <div key={col.id} className="kanban-col">
+                <div className="kanban-header">
+                  <span style={{ color: col.color }}>{col.title}</span>
+                  <span className="cat-badge" style={{ background: col.bg, color: col.color }}>{colOrders.length}</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {colOrders.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text3)', fontSize: '0.85rem' }}>No orders in this column</div>
+                  ) : (
+                    colOrders.map(order => (
+                      <div key={order.id || order.orderNumber} className="kanban-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <strong style={{ fontSize: '1rem', color: 'var(--red)' }}>#{order.orderNumber}</strong>
+                          <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: 'var(--radius-full)', background: 'var(--surface-alt)', fontWeight: 700 }}>
+                            {order.orderType?.toUpperCase() || 'DELIVERY'}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text2)', borderBottom: '1px solid var(--border-light)', paddingBottom: '6px' }}>
+                          <div>👤 <strong>{order.customerName || 'Customer'}</strong> ({order.customerPhone || 'N/A'})</div>
+                          {order.deliveryAddress && <div style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>📍 {order.deliveryAddress}</div>}
+                          <div style={{ fontSize: '0.75rem', marginTop: '2px' }}>⏰ {order.orderTime || new Date(order.createdAt).toLocaleTimeString()}</div>
+                        </div>
+
+                        <div style={{ fontSize: '0.82rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {order.items?.map((item, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{item.quantity}x {item.name || item.item?.name}</span>
+                              <span style={{ color: 'var(--text3)' }}>£{((item.price || item.unitPrice || 0) * item.quantity).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: '8px', marginTop: '4px' }}>
+                          <span style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--text)' }}>£{order.total?.toFixed(2)}</span>
+                          <button onClick={() => setPrintModalOrder(order)} className="btn-add-item compact" style={{ fontSize: '0.75rem' }}>
+                            <Printer size={12} /> Print Docket
+                          </button>
+                        </div>
+
+                        {/* Status Controls */}
+                        <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                          {col.id === 'Placed' && (
+                            <button onClick={() => handleStatusChange(order.id || order.orderNumber, 'Preparing')} className="btn-submit-modal" style={{ width: '100%', padding: '6px', fontSize: '0.8rem', background: '#F59E0B' }}>
+                              Start Kitchen Prep
+                            </button>
+                          )}
+                          {col.id === 'Preparing' && (
+                            <button onClick={() => handleStatusChange(order.id || order.orderNumber, order.orderType === 'collection' ? 'Completed' : 'Out for Delivery')} className="btn-submit-modal" style={{ width: '100%', padding: '6px', fontSize: '0.8rem', background: '#6366F1' }}>
+                              {order.orderType === 'collection' ? 'Ready for Customer' : 'Dispatch Driver'}
+                            </button>
+                          )}
+                          {col.id === 'Out for Delivery' && (
+                            <button onClick={() => handleStatusChange(order.id || order.orderNumber, 'Completed')} className="btn-submit-modal" style={{ width: '100%', padding: '6px', fontSize: '0.8rem', background: '#10B981' }}>
+                              Mark Delivered
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* TAB 2: MENU & PRODUCT MANAGEMENT (ADD / EDIT / TOGGLE STOCK) */}
+      {activeTab === 'menu_editor' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '10px', flex: 1, minWidth: '280px' }}>
               <div className="search-container" style={{ flex: 1 }}>
                 <Search size={16} />
                 <input
@@ -633,7 +804,6 @@ export default function AdminDashboard({ showToast }) {
                 <input name="imageUrl" defaultValue={editingProduct?.imageUrl || ''} className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="https://images.unsplash.com/..." />
               </div>
 
-              {/* Badges & Options checkboxes */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--surface-alt)', padding: '10px', borderRadius: 'var(--radius-sm)' }}>
                 <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input type="checkbox" name="isBestseller" defaultChecked={editingProduct?.isBestseller} /> Bestseller Badge

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame } from 'lucide-react';
+import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame, Shield } from 'lucide-react';
 
 const navLinks = [
   { label: 'Menu', href: '#menu' },
@@ -45,7 +45,7 @@ export default function Header({
     return undefined;
   }, [cartCount]);
 
-  const staffLabel = isAdminView ? 'Storefront' : adminUser ? 'Staff Dashboard' : 'Staff Login';
+  const staffLabel = isAdminView ? 'Back to Store' : adminUser ? 'Staff Dashboard' : 'Staff Login';
 
   return (
     <header className={`header-container ${scrolled ? 'header-scrolled' : ''}`}>
@@ -56,6 +56,7 @@ export default function Header({
           </span>
         </div>
         <button className="staff-panel-btn" type="button" onClick={onStaffPanelClick}>
+          <Shield size={13} style={{ marginRight: 4 }} />
           {staffLabel}
         </button>
       </div>
@@ -134,7 +135,28 @@ export default function Header({
                   <User size={18} />
                   <span className="account-btn-label">Account</span>
                 </button>
+
+                <button
+                  className="account-btn"
+                  type="button"
+                  onClick={onStaffPanelClick}
+                  style={{ background: 'var(--red-light)', color: 'var(--red)', borderColor: 'var(--red-glow)' }}
+                >
+                  <Shield size={18} />
+                  <span className="account-btn-label">{staffLabel}</span>
+                </button>
               </>
+            )}
+
+            {isAdminView && (
+              <button
+                className="btn-submit-modal"
+                type="button"
+                onClick={onStaffPanelClick}
+                style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+              >
+                Exit Staff Mode
+              </button>
             )}
 
             <button className="cart-btn" type="button" onClick={onOpenCart} aria-label="Open basket">
@@ -175,6 +197,7 @@ export default function Header({
                 onStaffPanelClick();
               }}
             >
+              <Shield size={18} style={{ marginRight: 6 }} />
               {staffLabel}
             </button>
           </nav>
