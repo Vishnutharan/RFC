@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import confetti from 'canvas-confetti';
 import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X, ShieldCheck, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { checkDeliveryEligibility, getDeliveryEligibility } from '../utils/deliveryRadius';
 import { getCurrentUser } from '../services/customerAuth';
@@ -83,7 +83,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
 
   useEffect(() => {
     if (currentMode === 'collection') {
-      setRadiusCheck({ isEligible: true, isChecking: false, distanceKm: 0, reason: 'Store collection from 119 Courtlands Dr, Watford WD17 4HZ' });
+      setRadiusCheck({ isEligible: true, isChecking: false, distanceKm: 0, reason: 'Store collection from 119 Courtlands Dr, Watford' });
       return undefined;
     }
 
@@ -213,7 +213,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
         : null;
 
       await onOrderSuccess(buildOrderPayload(stripePaymentIntentId));
-      confetti({ particleCount: 160, spread: 72, origin: { y: 0.62 }, colors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6'] });
+      confetti({ particleCount: 180, spread: 80, origin: { y: 0.6 }, colors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6'] });
     } catch (error) {
       setSubmitError(error.message || 'Order could not be completed. Please try again.');
     } finally {
@@ -226,7 +226,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
       base: {
         color: '#1E293B',
         fontFamily: 'Inter, -apple-system, system-ui, sans-serif',
-        fontSize: '14px',
+        fontSize: '13px',
         fontWeight: '500',
         '::placeholder': { color: '#94A3B8' }
       },
@@ -244,125 +244,127 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
           initial={{ opacity: 0 }} 
           animate={{ opacity: 1 }} 
           exit={{ opacity: 0 }}
-          style={{ padding: '12px', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ padding: '8px', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <motion.div
             className="modal-card checkout-card"
             onClick={(event) => event.stopPropagation()}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, scale: 0.92, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 15 }}
+            transition={{ type: 'spring', damping: 26, stiffness: 320 }}
             style={{ 
               width: '100%', 
-              maxWidth: '920px', 
-              maxHeight: '86vh', 
+              maxWidth: '860px', 
+              maxHeight: '94vh', 
               display: 'flex', 
               flexDirection: 'column', 
               background: 'var(--surface)', 
-              borderRadius: 'var(--radius-lg)', 
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', 
+              borderRadius: '20px', 
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)', 
               overflow: 'hidden',
               position: 'relative'
             }}
           >
             {/* Modal Header */}
-            <div className="modal-header" style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', flexShrink: 0, background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 50%, #F8FAFC 100%)' }}>
+            <div className="modal-header" style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', flexShrink: 0, background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 50%, #F8FAFC 100%)' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h3 style={{ margin: 0, fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Lock size={18} color="var(--red)" /> Secure Checkout
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-head)', fontSize: '1.15rem', fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Lock size={16} color="var(--red)" /> Secure Checkout
                   </h3>
-                  <span className="card-badge badge-bestseller" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '4px', background: '#ECFDF5', color: '#047857', padding: '2px 6px', borderRadius: '4px' }}>
-                    <ShieldCheck size={11} /> 256-Bit SSL
+                  <span className="card-badge badge-bestseller" style={{ fontSize: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '3px', background: '#ECFDF5', color: '#047857', padding: '2px 6px', borderRadius: '4px' }}>
+                    <ShieldCheck size={10} /> SSL Secure
                   </span>
                 </div>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text2)', margin: '2px 0 0 0' }}>
-                  {currentMode === 'delivery' ? 'Hot & Fresh delivery to your Watford address' : 'Quick store collection from Courtlands Drive'}
+                <p style={{ fontSize: '0.75rem', color: 'var(--text2)', margin: '1px 0 0 0' }}>
+                  {currentMode === 'delivery' ? 'Hot & Fresh delivery to your Watford address' : 'Quick collection from Courtlands Drive'}
                 </p>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div className="order-mode-toggle" style={{ background: '#FFF', border: '1px solid var(--border)', padding: '2px', borderRadius: 'var(--radius-full)', display: 'flex', gap: '2px' }}>
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
                     type="button"
                     className={`mode-btn ${currentMode === 'delivery' ? 'active' : ''}`}
                     onClick={() => handleModeSwitch('delivery')}
                     style={{ 
-                      padding: '5px 12px', 
-                      fontSize: '0.78rem', 
+                      padding: '4px 10px', 
+                      fontSize: '0.75rem', 
                       fontWeight: 700,
                       border: 'none', 
                       borderRadius: 'var(--radius-full)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '5px',
+                      gap: '4px',
                       background: currentMode === 'delivery' ? 'var(--red)' : 'transparent',
                       color: currentMode === 'delivery' ? '#FFF' : 'var(--text2)',
                       cursor: 'pointer'
                     }}
                   >
-                    <Truck size={13} /> Delivery
-                  </button>
-                  <button
+                    <Truck size={12} /> Delivery
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
                     type="button"
                     className={`mode-btn ${currentMode === 'collection' ? 'active' : ''}`}
                     onClick={() => handleModeSwitch('collection')}
                     style={{ 
-                      padding: '5px 12px', 
-                      fontSize: '0.78rem', 
+                      padding: '4px 10px', 
+                      fontSize: '0.75rem', 
                       fontWeight: 700,
                       border: 'none', 
                       borderRadius: 'var(--radius-full)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '5px',
+                      gap: '4px',
                       background: currentMode === 'collection' ? 'var(--red)' : 'transparent',
                       color: currentMode === 'collection' ? '#FFF' : 'var(--text2)',
                       cursor: 'pointer'
                     }}
                   >
-                    <Store size={13} /> Collect
-                  </button>
+                    <Store size={12} /> Collect
+                  </motion.button>
                 </div>
 
-                <button className="close-btn" type="button" onClick={onClose} aria-label="Close checkout" style={{ border: 'none', background: 'var(--surface-alt)', borderRadius: '50%', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)' }}>
-                  <X size={16} />
+                <button className="close-btn" type="button" onClick={onClose} aria-label="Close checkout" style={{ border: 'none', background: 'var(--surface-alt)', borderRadius: '50%', padding: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)' }}>
+                  <X size={15} />
                 </button>
               </div>
             </div>
 
-            {/* Scrollable Checkout Form Body */}
-            <form id="checkout-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 0 }}>
+            {/* Scrollable Form Body */}
+            <form id="checkout-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 0 }}>
               
               {/* LEFT COLUMN: Contact, Address, Payment */}
-              <div style={{ padding: '16px 20px', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ padding: '12px 16px', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 
                 {submitError && (
-                  <div style={{ padding: '10px 12px', background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: 'var(--radius-sm)', color: 'var(--red)', fontSize: '0.82rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <AlertTriangle size={15} /> {submitError}
+                  <div style={{ padding: '8px 10px', background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: 'var(--radius-sm)', color: 'var(--red)', fontSize: '0.78rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AlertTriangle size={14} /> {submitError}
                   </div>
                 )}
 
-                {/* 1. Contact Info */}
+                {/* 1. Contact Details */}
                 <div>
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.95rem', fontWeight: 800, color: 'var(--text)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <User size={15} color="var(--red)" /> 1. Contact Details
+                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <User size={14} color="var(--red)" /> 1. Contact Details
                   </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                      <User size={15} color="var(--text3)" />
-                      <input name="name" placeholder="Full Name" value={formData.name} onChange={handleChange} required style={{ border: 'none', padding: '9px 0', width: '100%', outline: 'none', fontSize: '0.85rem', fontFamily: 'var(--font-body)' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                      <User size={14} color="var(--text3)" />
+                      <input name="name" placeholder="Full Name" value={formData.name} onChange={handleChange} required style={{ border: 'none', padding: '7px 0', width: '100%', outline: 'none', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }} />
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                        <Mail size={15} color="var(--text3)" />
-                        <input name="email" type="email" placeholder="Email" value={formData.email} onChange={handleChange} required style={{ border: 'none', padding: '9px 0', width: '100%', outline: 'none', fontSize: '0.85rem', fontFamily: 'var(--font-body)' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                        <Mail size={14} color="var(--text3)" />
+                        <input name="email" type="email" placeholder="Email Address" value={formData.email} onChange={handleChange} required style={{ border: 'none', padding: '7px 0', width: '100%', outline: 'none', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }} />
                       </div>
-                      <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                        <Phone size={15} color="var(--text3)" />
-                        <input name="phone" type="tel" placeholder="Mobile Phone" value={formData.phone} onChange={handleChange} required style={{ border: 'none', padding: '9px 0', width: '100%', outline: 'none', fontSize: '0.85rem', fontFamily: 'var(--font-body)' }} />
+                      <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                        <Phone size={14} color="var(--text3)" />
+                        <input name="phone" type="tel" placeholder="Mobile Phone" value={formData.phone} onChange={handleChange} required style={{ border: 'none', padding: '7px 0', width: '100%', outline: 'none', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }} />
                       </div>
                     </div>
                   </div>
@@ -370,50 +372,49 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
 
                 {/* 2. Delivery Address / Collection */}
                 <div>
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.95rem', fontWeight: 800, color: 'var(--text)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {currentMode === 'delivery' ? <Truck size={15} color="var(--red)" /> : <Store size={15} color="var(--red)" />}
+                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    {currentMode === 'delivery' ? <Truck size={14} color="var(--red)" /> : <Store size={14} color="var(--red)" />}
                     2. {currentMode === 'delivery' ? 'Delivery Address' : 'Collection Point'}
                   </h4>
 
                   {currentMode === 'delivery' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
-                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                          <MapPin size={15} color="var(--text3)" />
-                          <input name="address" placeholder="Street Address" value={formData.address} onChange={handleChange} required style={{ border: 'none', padding: '9px 0', width: '100%', outline: 'none', fontSize: '0.85rem', fontFamily: 'var(--font-body)' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '6px' }}>
+                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                          <MapPin size={14} color="var(--text3)" />
+                          <input name="address" placeholder="Street Address" value={formData.address} onChange={handleChange} required style={{ border: 'none', padding: '7px 0', width: '100%', outline: 'none', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }} />
                         </div>
-                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                          <MapPin size={15} color="var(--text3)" />
-                          <input name="postcode" placeholder="Postcode" value={formData.postcode} onChange={handleChange} required style={{ border: 'none', padding: '9px 0', width: '100%', outline: 'none', fontSize: '0.85rem', fontFamily: 'var(--font-body)' }} />
+                        <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                          <MapPin size={14} color="var(--text3)" />
+                          <input name="postcode" placeholder="Postcode" value={formData.postcode} onChange={handleChange} required style={{ border: 'none', padding: '7px 0', width: '100%', outline: 'none', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }} />
                         </div>
                       </div>
 
-                      {/* Radius Badge */}
+                      {/* Radius Badge Pill */}
                       <div style={{
-                        padding: '6px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', fontWeight: 700,
-                        display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '5px 8px', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', fontWeight: 700,
+                        display: 'flex', alignItems: 'center', gap: '5px',
                         background: radiusCheck.isChecking ? '#FFFBEB' : radiusCheck.isEligible ? '#F0FDF4' : '#FEF2F2',
                         border: `1px solid ${radiusCheck.isChecking ? '#FDE68A' : radiusCheck.isEligible ? '#DCFCE7' : '#FEE2E2'}`,
                         color: radiusCheck.isChecking ? '#D97706' : radiusCheck.isEligible ? '#15803D' : '#DC2626'
                       }}>
-                        {radiusCheck.isEligible && !radiusCheck.isChecking ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
+                        {radiusCheck.isEligible && !radiusCheck.isChecking ? <CheckCircle size={13} /> : <AlertTriangle size={13} />}
                         <span>{radiusCheck.reason}</span>
                       </div>
 
-                      <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
-                        <Truck size={15} color="var(--text3)" />
-                        <input name="notes" placeholder="Delivery notes / Gate code (Optional)" value={formData.notes} onChange={handleChange} style={{ border: 'none', padding: '9px 0', width: '100%', outline: 'none', fontSize: '0.85rem', fontFamily: 'var(--font-body)' }} />
+                      <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 8px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+                        <Truck size={14} color="var(--text3)" />
+                        <input name="notes" placeholder="Delivery notes / Gate code (Optional)" value={formData.notes} onChange={handleChange} style={{ border: 'none', padding: '7px 0', width: '100%', outline: 'none', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }} />
                       </div>
                     </div>
                   ) : (
-                    <div style={{ background: 'var(--surface-alt)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ background: '#FFF', color: 'var(--red)', padding: '8px', borderRadius: '50%', boxShadow: 'var(--shadow-sm)' }}>
-                        <Store size={20} />
+                    <div style={{ background: 'var(--surface-alt)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ background: '#FFF', color: 'var(--red)', padding: '6px', borderRadius: '50%', boxShadow: 'var(--shadow-sm)' }}>
+                        <Store size={18} />
                       </div>
                       <div>
-                        <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text)' }}>RFC Watford Kitchen</strong>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>119 Courtlands Drive, Watford WD17 4HZ</span>
-                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--green)', fontWeight: 800, marginTop: '2px' }}>⚡ Pickup ready in 15-20 mins</span>
+                        <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text)' }}>RFC Watford Kitchen</strong>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>119 Courtlands Drive, Watford WD17 4HZ</span>
                       </div>
                     </div>
                   )}
@@ -421,11 +422,11 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
 
                 {/* 3. Payment Method */}
                 <div>
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.95rem', fontWeight: 800, color: 'var(--text)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <CreditCard size={15} color="var(--red)" /> 3. Payment Method
+                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.88rem', fontWeight: 800, color: 'var(--text)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <CreditCard size={14} color="var(--red)" /> 3. Payment Method
                   </h4>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
                     {[
                       { id: 'card', icon: CreditCard, label: 'Credit / Debit Card' },
                       { id: 'cash', icon: Banknote, label: currentMode === 'delivery' ? 'Cash on Delivery' : 'Cash on Collection' }
@@ -433,10 +434,12 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                       const Icon = method.icon;
                       const isSelected = formData.paymentMethod === method.id;
                       return (
-                        <label 
+                        <motion.label 
                           key={method.id} 
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.97 }}
                           style={{ 
-                            padding: '10px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.82rem',
+                            padding: '8px 10px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.78rem',
                             border: `2px solid ${isSelected ? 'var(--red)' : 'var(--border)'}`, 
                             background: isSelected ? '#FEF2F2' : '#FFF',
                             color: isSelected ? 'var(--red)' : 'var(--text)',
@@ -451,21 +454,21 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                             onChange={handleChange}
                             style={{ display: 'none' }}
                           />
-                          <Icon size={16} />
+                          <Icon size={14} />
                           <span>{method.label}</span>
-                        </label>
+                        </motion.label>
                       );
                     })}
                   </div>
 
                   {formData.paymentMethod === 'card' && (
-                    <div style={{ padding: '12px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ padding: '8px 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
                       {!stripeConfigured && (
-                        <div style={{ marginBottom: '8px', fontSize: '0.78rem', color: 'var(--amber)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <AlertTriangle size={14} /> Stripe publishable key missing. Demo card active.
+                        <div style={{ marginBottom: '4px', fontSize: '0.72rem', color: 'var(--amber)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={12} /> Stripe publishable key missing. Demo card active.
                         </div>
                       )}
-                      <div style={{ padding: '4px 0' }}>
+                      <div style={{ padding: '2px 0' }}>
                         <CardElement options={stripeStyle} />
                       </div>
                     </div>
@@ -475,17 +478,17 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
               </div>
 
               {/* RIGHT COLUMN: Order Summary */}
-              <div style={{ padding: '16px 20px', background: 'var(--surface-alt)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '14px' }}>
+              <div style={{ padding: '12px 16px', background: 'var(--surface-alt)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '10px' }}>
                 <div>
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.05rem', fontWeight: 900, color: 'var(--text)', marginBottom: '12px' }}>
+                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 900, color: 'var(--text)', marginBottom: '8px' }}>
                     Order Summary ({cartItems.length} {cartItems.length === 1 ? 'item' : 'items'})
                   </h4>
 
                   {/* Cart Items List */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto', paddingRight: '4px' }}>
                     {cartItems.map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFF', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.82rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFF', padding: '6px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.78rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{ fontWeight: 800, color: 'var(--red)' }}>{item.quantity}x</span>
                           <span style={{ fontWeight: 700, color: 'var(--text)' }}>{item.name}</span>
                         </div>
@@ -497,80 +500,81 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                   </div>
 
                   {/* Price Breakdown Card */}
-                  <div style={{ marginTop: '14px', background: '#FFF', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px', boxShadow: 'var(--shadow-sm)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text2)' }}>
+                  <div style={{ marginTop: '10px', background: '#FFF', padding: '10px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text2)' }}>
                       <span>Subtotal</span>
                       <span>£{subtotal.toFixed(2)}</span>
                     </div>
 
                     {discount > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--green)', fontWeight: 800 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--green)', fontWeight: 800 }}>
                         <span>Voucher Discount ({appliedVoucher?.code})</span>
                         <span>-£{discount.toFixed(2)}</span>
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text2)' }}>
                       <span>Delivery Fee</span>
                       <span>{deliveryFee === 0 ? <span style={{ color: 'var(--green)', fontWeight: 800 }}>FREE</span> : `£${deliveryFee.toFixed(2)}`}</span>
                     </div>
 
-                    <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+                    <div style={{ height: '1px', background: 'var(--border)', margin: '3px 0' }} />
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.05rem', fontWeight: 900, color: 'var(--text)' }}>Total to Pay</span>
-                      <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.45rem', fontWeight: 900, color: 'var(--red)' }}>
+                      <span style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 900, color: 'var(--text)' }}>Total to Pay</span>
+                      <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900, color: 'var(--red)' }}>
                         £{total.toFixed(2)}
                       </span>
                     </div>
                   </div>
                 </div>
-
               </div>
 
             </form>
 
-            {/* PINNED STICKY FOOTER ACTION BAR */}
+            {/* PINNED STICKY FOOTER ACTION BAR WITH ANIMATIONS */}
             <div style={{ 
-              padding: '12px 20px', 
+              padding: '10px 18px', 
               background: '#FFF', 
               borderTop: '1px solid var(--border)', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'space-between', 
-              gap: '16px',
+              gap: '14px',
               flexShrink: 0,
-              zIndex: 20,
-              boxShadow: '0 -4px 12px rgba(0,0,0,0.05)'
+              zIndex: 30,
+              boxShadow: '0 -4px 12px rgba(0,0,0,0.06)'
             }}>
               <div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>Total Amount</span>
-                <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.35rem', fontWeight: 900, color: 'var(--red)' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text3)', fontWeight: 700, textTransform: 'uppercase', display: 'block' }}>Total Amount</span>
+                <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900, color: 'var(--red)' }}>
                   £{total.toFixed(2)}
                 </span>
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ scale: isValid && !isSubmitting ? 1.02 : 1 }}
+                whileTap={{ scale: isValid && !isSubmitting ? 0.97 : 1 }}
                 type="submit"
                 form="checkout-form"
                 className="btn-submit-modal"
                 disabled={!isValid || isSubmitting}
                 style={{ 
                   flex: 1,
-                  maxWidth: '360px',
-                  padding: '14px 20px', 
+                  maxWidth: '380px',
+                  padding: '12px 20px', 
                   fontSize: '1.05rem', 
                   fontWeight: 900, 
                   display: 'flex', 
                   alignItems: 'center', 
                   justifyContent: 'center', 
                   gap: '8px',
-                  background: (!isValid || isSubmitting) ? 'var(--text3)' : 'var(--red)',
+                  background: (!isValid || isSubmitting) ? 'var(--text3)' : 'linear-gradient(135deg, var(--red), #DC2626)',
                   color: '#FFF', 
                   border: 'none', 
                   borderRadius: 'var(--radius-full)',
                   cursor: (!isValid || isSubmitting) ? 'not-allowed' : 'pointer',
-                  boxShadow: (!isValid || isSubmitting) ? 'none' : 'var(--shadow-red)',
+                  boxShadow: (!isValid || isSubmitting) ? 'none' : '0 8px 20px rgba(220, 38, 38, 0.35)',
                   transition: 'all 0.2s ease'
                 }}
               >
@@ -579,7 +583,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                 ) : (
                   <><Lock size={18} /> Place Order - £{total.toFixed(2)}</>
                 )}
-              </button>
+              </motion.button>
             </div>
 
           </motion.div>
