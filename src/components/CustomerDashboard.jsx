@@ -238,40 +238,22 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
       <main className="customer-dashboard-container" style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: '1400px', margin: '0 auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
         
         {authMode !== 'none' ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 0', minHeight: 0, overflowY: 'auto' }}>
-            <div style={{
-              background: '#FFF',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-lg)',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              maxWidth: '900px',
-              width: '100%',
-              overflow: 'hidden'
-            }}>
+          <div className="customer-auth-shell">
+            <div className={`customer-auth-card ${authMode === 'register' ? 'is-register' : 'is-login'}`}>
               {/* Left Brand Hero Panel */}
-              <div style={{
-                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 40%, var(--red) 100%)',
-                padding: '36px 32px',
-                color: '#FFF',
-                display: 'flex',
-                flexDirection: 'column',
-                justify: 'space-between',
-                position: 'relative'
-              }}>
+              <div className="customer-auth-benefits">
                 <div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)', padding: '5px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 800, marginBottom: '24px', border: '1px solid rgba(255,255,255,0.18)' }}>
+                  <div className="customer-auth-kicker">
                     <Sparkles size={14} color="var(--amber)" /> RFC WATFORD VIP CLUB
                   </div>
-                  <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '2rem', fontWeight: 900, lineHeight: 1.2, margin: '0 0 14px 0', letterSpacing: '-0.5px' }}>
+                  <h2 className="customer-auth-title">
                     Crispy Chicken.<br />Instant Rewards.
                   </h2>
-                  <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5, margin: '0 0 28px 0' }}>
+                  <p className="customer-auth-copy">
                     Sign in to track orders live, earn 8-stamp loyalty rewards, and claim 15% OFF vouchers!
                   </p>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="customer-auth-benefit-list">
                     {[
                       { icon: Award, title: '8-Stamp Loyalty Club', desc: 'Earn 1 stamp per order & unlock 15% OFF.' },
                       { icon: RotateCcw, title: '1-Click Express Reorder', desc: 'Reorder past feasts in seconds.' },
@@ -279,13 +261,13 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     ].map((f, i) => {
                       const FIcon = f.icon;
                       return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                          <div style={{ padding: '7px', background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', color: 'var(--amber)', flexShrink: 0, marginTop: '2px' }}>
+                        <div key={i} className="customer-auth-benefit-item">
+                          <div className="customer-auth-benefit-icon">
                             <FIcon size={16} />
                           </div>
                           <div>
-                            <strong style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800 }}>{f.title}</strong>
-                            <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)' }}>{f.desc}</span>
+                            <strong>{f.title}</strong>
+                            <span>{f.desc}</span>
                           </div>
                         </div>
                       );
@@ -294,7 +276,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 </div>
 
                 {/* Demo Credentials Fill Shortcut */}
-                <div style={{ marginTop: '28px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                <div className="customer-auth-demo">
                   <button
                     type="button"
                     onClick={() => {
@@ -308,11 +290,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                       });
                       if (showToast) showToast('⚡ Demo credentials filled!');
                     }}
-                    style={{
-                      width: '100%', padding: '9px 12px', background: 'rgba(255,255,255,0.12)', border: '1px dashed rgba(255,255,255,0.3)',
-                      borderRadius: 'var(--radius-sm)', color: '#FFF', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.2s'
-                    }}
+                    className="customer-auth-demo-btn"
                   >
                     ⚡ One-Click Fill Demo Credentials
                   </button>
@@ -320,68 +298,54 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               </div>
 
               {/* Right Form Panel */}
-              <div style={{ padding: '32px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="customer-auth-form-panel">
                 
                 {/* Segmented Control Pill */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', background: 'var(--surface-alt)', padding: '4px', borderRadius: 'var(--radius-full)', marginBottom: '20px' }}>
+                <div className="customer-auth-segment">
                   <button
                     type="button"
                     onClick={() => { setAuthMode('login'); setAuthError(''); }}
-                    style={{
-                      padding: '7px', borderRadius: 'var(--radius-full)', border: 'none',
-                      background: authMode === 'login' ? '#FFF' : 'transparent',
-                      color: authMode === 'login' ? 'var(--red)' : 'var(--text2)',
-                      fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
-                      boxShadow: authMode === 'login' ? 'var(--shadow-sm)' : 'none',
-                      transition: 'all 0.2s'
-                    }}
+                    className={`customer-auth-segment-btn ${authMode === 'login' ? 'active' : ''}`}
                   >
                     Sign In
                   </button>
                   <button
                     type="button"
                     onClick={() => { setAuthMode('register'); setAuthError(''); }}
-                    style={{
-                      padding: '7px', borderRadius: 'var(--radius-full)', border: 'none',
-                      background: authMode === 'register' ? '#FFF' : 'transparent',
-                      color: authMode === 'register' ? 'var(--red)' : 'var(--text2)',
-                      fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
-                      boxShadow: authMode === 'register' ? 'var(--shadow-sm)' : 'none',
-                      transition: 'all 0.2s'
-                    }}
+                    className={`customer-auth-segment-btn ${authMode === 'register' ? 'active' : ''}`}
                   >
                     Create Account
                   </button>
                 </div>
 
-                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', fontWeight: 900, color: 'var(--text)', margin: '0 0 4px 0' }}>
+                <h3 className="customer-auth-heading">
                   {authMode === 'login' ? 'Welcome Back!' : 'Create Account'}
                 </h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text2)', margin: '0 0 16px 0' }}>
+                <p className="customer-auth-subtitle">
                   {authMode === 'login' ? 'Please enter your account details below.' : 'Fill in your details to start earning stamps.'}
                 </p>
 
                 {authError && (
-                  <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--red-light)', border: '1px solid #FEE2E2', color: 'var(--red)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div className="customer-auth-error">
                     <AlertTriangle size={15} /> {authError}
                   </div>
                 )}
 
-                <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <form onSubmit={handleAuthSubmit} className="customer-auth-form">
                   {authMode === 'register' && (
                     <div>
-                      <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Full Name</label>
+                      <label className="customer-auth-label">Full Name</label>
                       <div className="input-group"><User size={15} /><input placeholder="Vishnu Karun" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                     </div>
                   )}
 
                   <div>
-                    <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Email Address</label>
+                    <label className="customer-auth-label">Email Address</label>
                     <div className="input-group"><Mail size={15} /><input type="email" placeholder="vishnu@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Password</label>
+                    <label className="customer-auth-label">Password</label>
                     <div className="input-group" style={{ position: 'relative' }}>
                       <Lock size={15} />
                       <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} required style={{ padding: '9px 36px 9px 12px', fontSize: '0.88rem', width: '100%' }} />
@@ -394,16 +358,16 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   {authMode === 'register' && (
                     <>
                       <div>
-                        <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Phone Number</label>
+                        <label className="customer-auth-label">Phone Number</label>
                         <div className="input-group"><Phone size={15} /><input placeholder="+44 7700 900077" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                      <div className="customer-auth-address-grid">
                         <div>
-                          <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Street Address</label>
+                          <label className="customer-auth-label">Street Address</label>
                           <div className="input-group"><MapPin size={15} /><input placeholder="37 Berry Avenue" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                         </div>
                         <div>
-                          <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Postcode</label>
+                          <label className="customer-auth-label">Postcode</label>
                           <div className="input-group"><MapPin size={15} /><input placeholder="WD24 6RU" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value.toUpperCase() })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                         </div>
                       </div>
@@ -412,22 +376,16 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                   <button
                     type="submit"
-                    className="btn-submit-modal"
-                    style={{
-                      padding: '11px', fontSize: '0.95rem', fontWeight: 900, marginTop: '6px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                      boxShadow: 'var(--shadow-red)'
-                    }}
+                    className="btn-submit-modal customer-auth-submit"
                   >
                     {authMode === 'login' ? 'Sign In' : 'Create Account'} <ArrowRight size={16} />
                   </button>
                 </form>
 
-                <div style={{ textAlign: 'center', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-light)' }}>
+                <div className="customer-auth-guest">
                   <button
                     type="button"
                     onClick={() => setAuthMode('none')}
-                    style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
                   >
                     Continue as Guest Customer →
                   </button>

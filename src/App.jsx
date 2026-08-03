@@ -115,6 +115,8 @@ export default function App() {
       .slice(0, 6)
   ), [menuItems]);
 
+  const showHeader = !isAdminView && !isCustomerDashboardOpen;
+
   const handleStaffPanelClick = useCallback(() => {
     if (isAdminView) {
       setIsAdminView(false);
@@ -167,8 +169,8 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <div className="app-container">
-      {!isAdminView && !isCustomerDashboardOpen && (
+      <div className={`app-container ${showHeader ? 'has-fixed-header' : ''}`}>
+      {showHeader && (
         <Header
           cartCount={cart.cartCount}
           orderMode={orderMode}

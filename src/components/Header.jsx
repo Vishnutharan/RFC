@@ -24,7 +24,29 @@ export default function Header({
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [bouncing, setBouncing] = useState(false);
+  const headerRef = useRef(null);
   const prevCount = useRef(cartCount);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return undefined;
+
+    const syncHeaderHeight = () => {
+      document.documentElement.style.setProperty('--site-header-height', `${Math.ceil(header.getBoundingClientRect().height)}px`);
+    };
+
+    syncHeaderHeight();
+    window.addEventListener('resize', syncHeaderHeight);
+
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncHeaderHeight);
+    resizeObserver?.observe(header);
+
+    return () => {
+      window.removeEventListener('resize', syncHeaderHeight);
+      resizeObserver?.disconnect();
+      document.documentElement.style.removeProperty('--site-header-height');
+    };
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
@@ -48,7 +70,7 @@ export default function Header({
   const adminLabel = isAdminView ? 'Back to Store' : adminUser ? 'Admin Dashboard' : 'Admin Login';
 
   return (
-    <header className={`header-container ${scrolled ? 'header-scrolled' : ''}`}>
+    <header ref={headerRef} className={`header-container ${scrolled ? 'header-scrolled' : ''}`}>
       <div className="announcement-bar">
         <div className="marquee-container">
           <span className="marquee-text">
