@@ -16,10 +16,17 @@ public sealed class CsrfMiddleware
     };
 
     private readonly RequestDelegate _next;
+    private readonly IHostEnvironment _environment;
+    private readonly HashSet<string> _allowedOrigins;
 
-    public CsrfMiddleware(RequestDelegate next)
+    public CsrfMiddleware(RequestDelegate next, IHostEnvironment environment, IConfiguration configuration)
     {
         _next = next;
+        _environment = environment;
+        _allowedOrigins = (configuration["Cors:AllowedOrigins"] ?? string.Empty)
+            .Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(origin => origin.TrimEnd('/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -31,6 +38,13 @@ public sealed class CsrfMiddleware
 
         if (UnsafeMethods.Contains(context.Request.Method) && ShouldValidate(context))
         {
+            if (!HasAllowedOrigin(context))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { message = "Request origin is not allowed." });
+                return;
+            }
+
             var cookieToken = context.Request.Cookies[CookieName];
             var headerToken = context.Request.Headers[HeaderName].FirstOrDefault();
 
@@ -60,7 +74,7 @@ public sealed class CsrfMiddleware
                !path.StartsWithSegments("/hubs");
     }
 
-    private static void EnsureTokenCookie(HttpContext context)
+    private void EnsureTokenCookie(HttpContext context)
     {
         if (!string.IsNullOrWhiteSpace(context.Request.Cookies[CookieName])) return;
 
@@ -68,9 +82,22 @@ public sealed class CsrfMiddleware
         {
             HttpOnly = false,
             SameSite = SameSiteMode.Lax,
-            Secure = context.Request.IsHttps,
-            Path = "/"
+            Secure = !_environment.IsDevelopment() || context.Request.IsHttps,
+            Path = "/",
+            MaxAge = TimeSpan.FromHours(8),
+            IsEssential = true
         });
+    }
+
+    private bool HasAllowedOrigin(HttpContext context)
+    {
+        var origin = context.Request.Headers.Origin.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(origin)) return true;
+        if (string.Equals(origin, "null", StringComparison.OrdinalIgnoreCase)) return false;
+
+        var requestOrigin = $"{context.Request.Scheme}://{context.Request.Host}".TrimEnd('/');
+        return string.Equals(origin.TrimEnd('/'), requestOrigin, StringComparison.OrdinalIgnoreCase) ||
+               _allowedOrigins.Contains(origin.TrimEnd('/'));
     }
 
     private static string CreateToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));

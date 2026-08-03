@@ -42,7 +42,4 @@ kubectl rollout status deployment/rfc-backend -n rfc-prod
 
 ## Leak Response
 
-1. Disable or rotate the leaked credential immediately.
-2. Search logs and audit logs for suspicious use.
-3. Invalidate active sessions if auth or database credentials were involved.
-4. Record the incident, timeline, and corrective action.
+Use the full [credential incident response runbook](credential-incident-response.md). Rotation and containment come before any Git history rewrite.

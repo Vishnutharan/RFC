@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Filter, MessageSquare, Send, Star, CheckCircle, AlertTriangle, User, Hash, Tag, ThumbsUp } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -20,7 +20,7 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
     orderNumber: ''
   });
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const data = await getReviewsAndComplaints();
       setItems(data || []);
@@ -28,11 +28,11 @@ export default function ReviewsManager({ isAdmin = false, showToast }) {
       setItems([]);
       showToast?.(error.message || 'Feedback could not be loaded.', 'error');
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const avgRating = items.length
     ? (items.reduce((sum, item) => sum + Number(item.rating || 5), 0) / items.length).toFixed(1)
@@ -522,4 +522,3 @@ ReviewsManager.propTypes = {
   isAdmin: PropTypes.bool,
   showToast: PropTypes.func
 };
-

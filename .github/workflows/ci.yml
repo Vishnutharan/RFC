@@ -4,7 +4,12 @@ on:
   pull_request:
   push:
     branches:
+      - master
       - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -12,32 +17,64 @@ permissions:
 
 jobs:
   build:
-    name: Build and scan
-    runs-on: ubuntu-latest
+    name: Build, test, and scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 9.0.316
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
 
-      - name: Restore backend
-        run: dotnet restore backend/RFC.Api.csproj
+      - name: Restore backend with NuGet audit
+        run: >-
+          dotnet restore backend.Tests/RFC.Api.Tests.csproj
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=moderate
+          -warnaserror:NU1901,NU1902,NU1903,NU1904
 
       - name: Build backend
-        run: dotnet build backend/RFC.Api.csproj --configuration Release --no-restore
+        run: dotnet build backend.Tests/RFC.Api.Tests.csproj --configuration Release --no-restore
+
+      - name: Test backend
+        run: >-
+          dotnet test backend.Tests/RFC.Api.Tests.csproj
+          --configuration Release
+          --no-build
+          --no-restore
+          --logger "trx;LogFileName=backend-tests.trx"
+          --results-directory artifacts/test-results
+
+      - name: Upload backend test results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: backend-test-results
+          path: artifacts/test-results/*.trx
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+      - name: Lint frontend
+        run: npm run lint
 
       - name: Build frontend
         run: npm run build
@@ -48,18 +85,49 @@ jobs:
       - name: Build frontend image
         run: docker build -f Dockerfile -t rfc-frontend:${{ github.sha }} .
 
+      - name: Prepare Trivy results directory
+        run: mkdir -p artifacts/trivy
+
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
+          scanners: vuln,secret,misconfig
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           format: sarif
-          output: trivy-results.sarif
+          output: artifacts/trivy/filesystem.sarif
+          exit-code: "1"
+
+      - name: Trivy backend image scan
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: rfc-backend:${{ github.sha }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: artifacts/trivy/backend-image.sarif
+          exit-code: "1"
+
+      - name: Trivy frontend image scan
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: rfc-frontend:${{ github.sha }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: artifacts/trivy/frontend-image.sarif
+          exit-code: "1"
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
+        if: ${{ always() && hashFiles('artifacts/trivy/*.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: artifacts/trivy

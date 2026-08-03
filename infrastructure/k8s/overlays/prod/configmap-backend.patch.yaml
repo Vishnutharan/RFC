@@ -3,5 +3,6 @@ kind: ConfigMap
 metadata:
   name: rfc-backend-config
 data:
+  AllowedHosts: "orders.rfcchickenwatford.com"
   Cors__AllowedOrigins: "https://orders.rfcchickenwatford.com"
   PublicAppUrl: "https://orders.rfcchickenwatford.com"

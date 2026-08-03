@@ -1,213 +1,221 @@
-import React, { useState, useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
+import { useCallback, useState, useEffect } from 'react';
 import { 
-  X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, 
-  Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle, 
-  Camera, Upload, Image, Star, ShieldCheck, Heart, Award, ArrowLeft, Clock, Copy,
-  Eye, EyeOff, ArrowRight, CheckCircle2
+  X, User, ShoppingBag, MapPin, Printer, RotateCcw, Sparkles,
+  Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle,
+  ShieldCheck, ArrowLeft, Clock,
+  Eye, EyeOff, ArrowRight
 } from 'lucide-react';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
-import { getCurrentUser, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
+import { getCurrentUser, getCustomerOrders, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
+import { deleteCurrentCustomer } from '../services/api';
 
-const AVATAR_PRESETS = [
-  { id: 'drumstick', label: '🍗 Crispy Drumstick', color: '#EF4444' },
-  { id: 'burger', label: '🍔 Gourmet Burger', color: '#F59E0B' },
-  { id: 'crown', label: '👑 VIP Crown', color: '#8B5CF6' },
-  { id: 'flame', label: '⚡ Spicy Flame', color: '#DC2626' },
-  { id: 'rocket', label: '🚀 Fast Delivery', color: '#2563EB' },
-  { id: 'pepper', label: '🌶️ Hot Pepper', color: '#10B981' },
-  { id: 'gentleman', label: '🎩 Chef Master', color: '#1F2937' },
-  { id: 'star', label: '🌟 Gold Star', color: '#D97706' }
-];
+const EMPTY_PROFILE = { name: '', phone: '', email: '', address: '', postcode: '' };
+const EMPTY_AUTH_FORM = { name: '', email: '', password: '', phone: '', address: '', postcode: '', consentAccepted: false };
 
 const AUTH_BENEFITS = [
   { icon: Clock, title: 'Live order tracking', desc: 'Follow kitchen and delivery updates from one place.' },
-  { icon: Gift, title: 'Loyalty rewards', desc: 'Earn stamps automatically when you order.' },
-  { icon: ShieldCheck, title: 'Saved account details', desc: 'Keep delivery details ready for repeat orders.' }
+  { icon: ShoppingBag, title: 'Account order history', desc: 'Review recent orders linked to your signed-in account.' },
+  { icon: ShieldCheck, title: 'Server-backed profile', desc: 'Manage delivery details through your authenticated account.' }
 ];
 
-const AUTH_METRICS = [
-  { value: '8', label: 'Stamp reward' },
-  { value: '15%', label: 'VIP voucher' },
-  { value: '1-click', label: 'Reorder' }
-];
-
-export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, showToast }) {
+export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, onAccountDeleted, showToast }) {
   const [activeTab, setActiveTab] = useState('orders');
-  const [currentUser, setCurrentUser] = useState({ name: 'Vishnu Karun', email: 'vishnu@example.com', phone: '+44 7700 900077', address: '37 Berry Avenue', postcode: 'WD24 6RU', avatarUrl: '', avatarPreset: 'crown' });
+  const [currentUser, setCurrentUser] = useState(null);
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
 
   // Profile Edit State
-  const [profileForm, setProfileForm] = useState({ name: '', phone: '', email: '', address: '', postcode: '', avatarUrl: '', avatarPreset: '' });
+  const [profileForm, setProfileForm] = useState(EMPTY_PROFILE);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const fileInputRef = useRef(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(false);
+  const [accountOrders, setAccountOrders] = useState([]);
+  const [isOrderHistoryLoading, setIsOrderHistoryLoading] = useState(false);
 
   // Auth Mode State
   const [authMode, setAuthMode] = useState('none'); // 'none', 'login', 'register'
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', address: '', postcode: '' });
+  const [authForm, setAuthForm] = useState(EMPTY_AUTH_FORM);
   const [authError, setAuthError] = useState('');
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const isAuthenticated = currentUser?.role === 'customer' && Boolean(currentUser?.id);
+  const visibleOrders = isAuthenticated ? accountOrders : orders;
+
+  const loadAccountOrders = useCallback(async () => {
+    setIsOrderHistoryLoading(true);
+    try {
+      const history = await getCustomerOrders(1, 20);
+      const next = Array.isArray(history) ? history : [];
+      setAccountOrders(next);
+      return next;
+    } catch (error) {
+      setAccountOrders([]);
+      showToast?.(error.message || 'Could not load your order history.', 'error');
+      return [];
+    } finally {
+      setIsOrderHistoryLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    if (isOpen) {
-      const savedUser = localStorage.getItem('rfc_customer_profile');
-      let u = savedUser ? JSON.parse(savedUser) : {
-        name: 'Vishnu Karun',
-        email: 'vishnu@example.com',
-        phone: '+44 7700 900077',
-        address: '37 Berry Avenue',
-        postcode: 'WD24 6RU',
-        avatarUrl: '',
-        avatarPreset: 'crown'
-      };
+    if (!isOpen) return undefined;
 
-      setCurrentUser(u);
-      setProfileForm({
-        name: u.name || '',
-        phone: u.phone || '',
-        email: u.email || '',
-        address: u.address || '',
-        postcode: u.postcode || '',
-        avatarUrl: u.avatarUrl || '',
-        avatarPreset: u.avatarPreset || 'crown'
-      });
+    let isActive = true;
+    setIsSessionLoading(true);
+    try {
+      window.localStorage.removeItem('rfc_customer_profile');
+    } catch {
+      // Best-effort cleanup of the legacy profile cache.
     }
-  }, [isOpen]);
+
+    getCurrentUser()
+      .then(async (user) => {
+        if (!isActive) return;
+        setCurrentUser(user);
+        setProfileForm(user ? {
+          name: user.name || '',
+          phone: user.phone || '',
+          email: user.email || '',
+          address: user.address || '',
+          postcode: user.postcode || ''
+        } : EMPTY_PROFILE);
+        if (user) {
+          await loadAccountOrders();
+        } else {
+          setAccountOrders([]);
+        }
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        setCurrentUser(null);
+        setProfileForm(EMPTY_PROFILE);
+        setAccountOrders([]);
+        showToast?.(error.message || 'Could not load the customer account.', 'error');
+      })
+      .finally(() => {
+        if (isActive) setIsSessionLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [isOpen, loadAccountOrders, showToast]);
 
   if (!isOpen) return null;
 
-  // Handle Profile Picture File Upload (Image to DataURL)
-  const handleFileUpload = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      if (showToast) showToast('Image file size must be less than 5MB ⚠️');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target.result;
-      const updatedForm = { ...profileForm, avatarUrl: dataUrl, avatarPreset: '' };
-      setProfileForm(updatedForm);
-      
-      const updatedUser = { ...currentUser, ...updatedForm };
-      setCurrentUser(updatedUser);
-      localStorage.setItem('rfc_customer_profile', JSON.stringify(updatedUser));
-      if (showToast) showToast('Profile picture updated successfully! 📸');
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Handle Avatar Preset Selection
-  const selectPreset = (presetId) => {
-    const updatedForm = { ...profileForm, avatarUrl: '', avatarPreset: presetId };
-    setProfileForm(updatedForm);
-    
-    const updatedUser = { ...currentUser, ...updatedForm };
-    setCurrentUser(updatedUser);
-    localStorage.setItem('rfc_customer_profile', JSON.stringify(updatedUser));
-    if (showToast) showToast('Avatar updated! ✨');
-  };
-
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (!isAuthenticated || isSavingProfile) return;
+    setIsSavingProfile(true);
     try {
-      await updateCustomerProfile(profileForm);
-    } catch (err) {}
-    const updated = { ...currentUser, ...profileForm };
-    setCurrentUser(updated);
-    localStorage.setItem('rfc_customer_profile', JSON.stringify(updated));
-    setIsEditingProfile(false);
-    if (showToast) showToast('Profile details saved! ✨');
+      const updated = await updateCustomerProfile({
+        name: profileForm.name,
+        phone: profileForm.phone,
+        address: profileForm.address,
+        postcode: profileForm.postcode
+      });
+      setCurrentUser(updated);
+      setProfileForm({
+        name: updated.name || '',
+        phone: updated.phone || '',
+        email: updated.email || '',
+        address: updated.address || '',
+        postcode: updated.postcode || ''
+      });
+      setIsEditingProfile(false);
+      showToast?.('Profile details saved.');
+    } catch (error) {
+      showToast?.(error.message || 'Profile changes could not be saved.', 'error');
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
+    if (isAuthSubmitting) return;
 
-    if (authMode === 'login') {
-      try {
+    if (authMode === 'register' && !authForm.consentAccepted) {
+      setAuthError('You must consent to the privacy policy to create an account.');
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    try {
+      if (authMode === 'login') {
         const res = await loginCustomer(authForm.email, authForm.password);
-        if (res.success && res.user) {
-          setCurrentUser(res.user);
-          localStorage.setItem('rfc_customer_profile', JSON.stringify(res.user));
-          setAuthMode('none');
-          if (showToast) showToast(`Welcome back, ${res.user.name}! 🎉`);
-          return;
-        }
-      } catch (err) {}
-
-      const mockUser = {
-        name: authForm.email.split('@')[0] || 'Customer',
-        email: authForm.email,
-        phone: '+44 7700 900077',
-        address: '15 Watford High St',
-        postcode: 'WD17 1HP',
-        avatarPreset: 'crown'
-      };
-      setCurrentUser(mockUser);
-      localStorage.setItem('rfc_customer_profile', JSON.stringify(mockUser));
-      setAuthMode('none');
-      if (showToast) showToast(`Welcome back! 🎉`);
-
-    } else if (authMode === 'register') {
-      if (!authForm.name || !authForm.email || !authForm.password) {
-        setAuthError('Please enter your Name, Email, and Password');
-        return;
+        if (!res?.user) throw new Error('The server did not return a customer session.');
+        setCurrentUser(res.user);
+        setProfileForm({ name: res.user.name || '', phone: res.user.phone || '', email: res.user.email || '', address: res.user.address || '', postcode: res.user.postcode || '' });
+        await loadAccountOrders();
+        showToast?.(`Welcome back, ${res.user.name}.`);
+      } else if (authMode === 'register') {
+        const newUser = await registerCustomer({ ...authForm, consentAccepted: true });
+        if (!newUser?.id) throw new Error('The server did not create a customer account.');
+        setCurrentUser(newUser);
+        setProfileForm({ name: newUser.name || '', phone: newUser.phone || '', email: newUser.email || '', address: newUser.address || '', postcode: newUser.postcode || '' });
+        await loadAccountOrders();
+        showToast?.(`Account created. Welcome, ${newUser.name}.`);
       }
-      const newUser = {
-        name: authForm.name,
-        email: authForm.email,
-        phone: authForm.phone || '+44 7700 900077',
-        address: authForm.address || '37 Berry Avenue',
-        postcode: authForm.postcode || 'WD24 6RU',
-        avatarPreset: 'star'
-      };
-      try {
-        await registerCustomer(authForm);
-      } catch (err) {}
-      setCurrentUser(newUser);
-      localStorage.setItem('rfc_customer_profile', JSON.stringify(newUser));
       setAuthMode('none');
-      if (showToast) showToast(`Account created! Welcome, ${newUser.name} 🎉`);
+      setAuthForm(EMPTY_AUTH_FORM);
+    } catch (error) {
+      const message = error.message || 'Authentication failed. Please try again.';
+      setAuthError(message);
+      showToast?.(message, 'error');
+    } finally {
+      setIsAuthSubmitting(false);
     }
   };
 
   const handleLogout = async () => {
+    if (!isAuthenticated) {
+      setAuthMode('login');
+      return;
+    }
     try {
       await logoutCustomer();
-    } catch (err) {}
-    localStorage.removeItem('rfc_customer_profile');
-    const guestUser = { name: 'Guest Customer', email: '', phone: '', address: '', postcode: '', avatarPreset: 'drumstick' };
-    setCurrentUser(guestUser);
-    if (showToast) showToast('Logged out of customer account.');
+      setCurrentUser(null);
+      setProfileForm(EMPTY_PROFILE);
+      setAccountOrders([]);
+      setIsEditingProfile(false);
+      showToast?.('Logged out of customer account.', 'info');
+    } catch (error) {
+      showToast?.(error.message || 'Could not log out. Please try again.', 'error');
+    }
   };
 
-  const loyaltyCount = (orders.length % 8) || 7;
-  const loyaltyPercent = Math.min(100, Math.round((loyaltyCount / 8) * 100));
+  const handleDeleteAccount = async () => {
+    if (!isAuthenticated || isDeletingAccount) return;
+    if (!window.confirm('Delete and anonymise your customer account? This cannot be undone.')) return;
+
+    setIsDeletingAccount(true);
+    try {
+      await deleteCurrentCustomer();
+      setCurrentUser(null);
+      setProfileForm(EMPTY_PROFILE);
+      setAccountOrders([]);
+      setIsEditingProfile(false);
+      onAccountDeleted?.();
+      setAuthMode('login');
+      showToast?.('Your customer account has been deleted and personal order data anonymised.', 'info');
+    } catch (error) {
+      showToast?.(error.message || 'The account could not be deleted.', 'error');
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
 
   // Render User Avatar Icon / Image
   const renderUserAvatar = (size = 64) => {
-    if (currentUser?.avatarUrl) {
-      return (
-        <img 
-          src={currentUser.avatarUrl} 
-          alt="Profile Avatar" 
-          style={{ width: `${size}px`, height: `${size}px`, borderRadius: '50%', objectFit: 'cover', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }} 
-        />
-      );
-    }
-
-    const preset = AVATAR_PRESETS.find(p => p.id === currentUser?.avatarPreset) || AVATAR_PRESETS[2];
     const initial = currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U';
 
     return (
       <div style={{
         width: `${size}px`, height: `${size}px`, borderRadius: '50%',
-        background: `linear-gradient(135deg, ${preset.color}, var(--amber))`,
+        background: 'linear-gradient(135deg, var(--red), var(--amber))',
         color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontWeight: 900, fontSize: `${size * 0.45}px`, boxShadow: 'var(--shadow-red)',
         border: '3px solid #FFF', position: 'relative'
@@ -218,10 +226,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   };
 
   const TABS = [
-    { id: 'orders', label: 'My Orders', icon: ShoppingBag, count: orders.length },
+    { id: 'orders', label: 'My Orders', icon: ShoppingBag, count: visibleOrders.length },
     { id: 'profile', label: 'Profile Settings', icon: Edit3, count: '' },
-    { id: 'loyalty', label: 'Loyalty Rewards', icon: Gift, count: `${loyaltyCount}/8` },
-    { id: 'vouchers', label: 'My Vouchers', icon: Tag, count: '3' },
     { id: 'reviews', label: 'Reviews & Feedback', icon: MessageSquare, count: '' },
   ];
 
@@ -240,8 +246,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
           </div>
 
           {authMode === 'none' && (
-            <button onClick={() => setAuthMode('login')} className="mode-btn" style={{ padding: '6px 16px', fontSize: '0.85rem', border: '1px solid var(--border)', background: '#FFF' }}>
-              Switch Account
+            <button disabled={isSessionLoading} onClick={() => setAuthMode('login')} className="mode-btn" style={{ padding: '6px 16px', fontSize: '0.85rem', border: '1px solid var(--border)', background: '#FFF' }}>
+              {isSessionLoading ? 'Loading…' : (isAuthenticated ? 'Switch Account' : 'Sign In')}
             </button>
           )}
           {authMode !== 'none' && <div style={{ width: 128 }} aria-hidden="true" />}
@@ -263,7 +269,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     Account setup for faster ordering.
                   </h2>
                   <p className="customer-auth-copy">
-                    Keep profile, delivery, loyalty, and reorder details ready in one clean dashboard.
+                    Keep your order history and delivery details together in one account dashboard.
                   </p>
 
                   <div className="customer-auth-benefit-list">
@@ -283,36 +289,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     })}
                   </div>
 
-                  <div className="customer-auth-metrics">
-                    {AUTH_METRICS.map((metric) => (
-                      <div key={metric.label} className="customer-auth-metric">
-                        <strong>{metric.value}</strong>
-                        <span>{metric.label}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
 
-                {/* Demo Credentials Fill Shortcut */}
-                <div className="customer-auth-demo">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthForm({
-                        name: 'Vishnu Karun',
-                        email: 'vishnu@example.com',
-                        password: 'password123',
-                        phone: '+44 7700 900077',
-                        address: '37 Berry Avenue',
-                        postcode: 'WD24 6RU'
-                      });
-                      if (showToast) showToast('⚡ Demo credentials filled!');
-                    }}
-                    className="customer-auth-demo-btn"
-                  >
-                    ⚡ One-Click Fill Demo Credentials
-                  </button>
-                </div>
               </div>
 
               {/* Right Form Panel */}
@@ -340,7 +318,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   {authMode === 'login' ? 'Welcome Back!' : 'Create Account'}
                 </h3>
                 <p className="customer-auth-subtitle">
-                  {authMode === 'login' ? 'Please enter your account details below.' : 'Fill in your details to start earning stamps.'}
+                  {authMode === 'login' ? 'Please enter your account details below.' : 'Fill in your details to create your customer account.'}
                 </p>
 
                 {authError && (
@@ -353,20 +331,30 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   {authMode === 'register' && (
                     <div>
                       <label className="customer-auth-label">Full Name</label>
-                      <div className="input-group"><User size={15} /><input placeholder="Vishnu Karun" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                      <div className="input-group"><User size={15} /><input autoComplete="name" placeholder="Your full name" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                     </div>
                   )}
 
                   <div>
                     <label className="customer-auth-label">Email Address</label>
-                    <div className="input-group"><Mail size={15} /><input type="email" placeholder="vishnu@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                    <div className="input-group"><Mail size={15} /><input type="email" autoComplete="email" placeholder="you@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                   </div>
 
                   <div>
                     <label className="customer-auth-label">Password</label>
                     <div className="input-group" style={{ position: 'relative' }}>
                       <Lock size={15} />
-                      <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} required style={{ padding: '9px 36px 9px 12px', fontSize: '0.88rem', width: '100%' }} />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                        minLength={authMode === 'login' ? 8 : 12}
+                        maxLength={128}
+                        placeholder={authMode === 'login' ? 'Your password' : '12+ characters with upper, lower and a number'}
+                        value={authForm.password}
+                        onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                        required
+                        style={{ padding: '9px 36px 9px 12px', fontSize: '0.88rem', width: '100%' }}
+                      />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}>
                         {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
@@ -377,26 +365,37 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     <>
                       <div>
                         <label className="customer-auth-label">Phone Number</label>
-                        <div className="input-group"><Phone size={15} /><input placeholder="+44 7700 900077" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                        <div className="input-group"><Phone size={15} /><input autoComplete="tel" placeholder="Your phone number" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                       </div>
                       <div className="customer-auth-address-grid">
                         <div>
                           <label className="customer-auth-label">Street Address</label>
-                          <div className="input-group"><MapPin size={15} /><input placeholder="37 Berry Avenue" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                          <div className="input-group"><MapPin size={15} /><input autoComplete="street-address" placeholder="Your street address" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                         </div>
                         <div>
                           <label className="customer-auth-label">Postcode</label>
-                          <div className="input-group"><MapPin size={15} /><input placeholder="WD24 6RU" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value.toUpperCase() })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                          <div className="input-group"><MapPin size={15} /><input autoComplete="postal-code" placeholder="Postcode" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value.toUpperCase() })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
                         </div>
                       </div>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.78rem', color: 'var(--text2)', lineHeight: 1.4 }}>
+                        <input
+                          type="checkbox"
+                          checked={authForm.consentAccepted}
+                          onChange={(event) => setAuthForm({ ...authForm, consentAccepted: event.target.checked })}
+                          required
+                          style={{ marginTop: '2px' }}
+                        />
+                        <span>I consent to the privacy policy and the processing of my account and order details.</span>
+                      </label>
                     </>
                   )}
 
                   <button
                     type="submit"
                     className="btn-submit-modal customer-auth-submit"
+                    disabled={isAuthSubmitting}
                   >
-                    {authMode === 'login' ? 'Sign In' : 'Create Account'} <ArrowRight size={16} />
+                    {isAuthSubmitting ? 'Please wait…' : (authMode === 'login' ? 'Sign In' : 'Create Account')} <ArrowRight size={16} />
                   </button>
                 </form>
 
@@ -440,8 +439,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                       </h3>
                     </div>
                     {currentUser?.name && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--amber)', color: '#FFF', padding: '1px 7px', borderRadius: 'var(--radius-full)', fontSize: '0.68rem', fontWeight: 800, marginTop: '2px' }}>
-                        <Star size={9} fill="#FFF" /> {loyaltyCount >= 8 ? 'GOLD VIP' : loyaltyCount >= 4 ? 'SILVER VIP' : 'BRONZE VIP'}
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--green)', color: '#FFF', padding: '1px 7px', borderRadius: 'var(--radius-full)', fontSize: '0.68rem', fontWeight: 800, marginTop: '2px' }}>
+                        <ShieldCheck size={9} /> Signed in
                       </div>
                     )}
                     <p style={{ fontSize: '0.78rem', color: 'var(--text2)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -454,11 +453,11 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '10px', padding: '6px 10px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Orders</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--red)', fontFamily: 'var(--font-head)' }}>{orders.length}</span>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--red)', fontFamily: 'var(--font-head)' }}>{visibleOrders.length}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderLeft: '1px solid var(--border)', paddingLeft: '6px' }}>
-                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Stamps</span>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--amber)', fontFamily: 'var(--font-head)' }}>{loyaltyCount}/8</span>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Account</span>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 900, color: isAuthenticated ? 'var(--green)' : 'var(--text2)', fontFamily: 'var(--font-head)' }}>{isAuthenticated ? 'Signed in' : 'Guest'}</span>
                   </div>
                 </div>
               </div>
@@ -516,20 +515,22 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     Switch Account
                   </button>
 
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 8px 8px', padding: '9px 12px',
-                      background: 'var(--red-light)', border: 'none', borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer', color: 'var(--red)', fontWeight: 700, fontSize: '0.88rem',
-                      width: 'calc(100% - 16px)'
-                    }}
-                  >
-                    <div style={{ width: 28, height: 28, borderRadius: 6, background: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}>
-                      <LogOut size={15} />
-                    </div>
-                    Log Out
-                  </button>
+                  {isAuthenticated && (
+                    <button
+                      onClick={handleLogout}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 8px 8px', padding: '9px 12px',
+                        background: 'var(--red-light)', border: 'none', borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer', color: 'var(--red)', fontWeight: 700, fontSize: '0.88rem',
+                        width: 'calc(100% - 16px)'
+                      }}
+                    >
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}>
+                        <LogOut size={15} />
+                      </div>
+                      Log Out
+                    </button>
+                  )}
                 </div>
               </div>
             </aside>
@@ -556,12 +557,12 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {activeTab === 'orders' && orders.length > 0 && (
+                  {activeTab === 'orders' && visibleOrders.length > 0 && (
                     <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text2)', background: 'var(--surface-alt)', padding: '4px 12px', borderRadius: 'var(--radius-full)' }}>
-                      {orders.length} {orders.length === 1 ? 'Order' : 'Orders'} Total
+                      {visibleOrders.length} recent {visibleOrders.length === 1 ? 'order' : 'orders'} shown
                     </span>
                   )}
-                  {activeTab === 'profile' && (
+                  {activeTab === 'profile' && isAuthenticated && (
                     <button onClick={() => setIsEditingProfile(!isEditingProfile)} className="btn-add-item" style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Edit3 size={14} /> {isEditingProfile ? 'Cancel Editing' : 'Edit Profile'}
                     </button>
@@ -574,18 +575,20 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 
                 {activeTab === 'orders' && (
                   <div>
-                    {orders.length === 0 ? (
+                    {isOrderHistoryLoading ? (
+                      <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text2)' }}>Loading order history…</div>
+                    ) : visibleOrders.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' }}>
                         <ShoppingBag size={52} strokeWidth={1.2} style={{ marginBottom: '12px', color: 'var(--red)' }} />
                         <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 800, color: 'var(--text)', margin: 0 }}>No Orders Placed Yet</h4>
-                        <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginTop: '6px', marginBottom: '20px' }}>Order your favourite RFC crispy chicken to earn loyalty points!</p>
+                        <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginTop: '6px', marginBottom: '20px' }}>Place an order to see it here and make future reordering easier.</p>
                         <button onClick={onClose} className="btn-add-item" style={{ padding: '10px 24px', fontSize: '0.88rem' }}>
                           Browse Menu & Order
                         </button>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {orders.map((ord, i) => (
+                        {visibleOrders.map((ord, i) => (
                           <div key={ord.id || i} style={{ background: '#FFF', borderRadius: 'var(--radius)', padding: '18px 20px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
                               <div>
@@ -623,8 +626,16 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                 {activeTab === 'profile' && (
                   <div>
-                    {!isEditingProfile ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                    {!isAuthenticated ? (
+                      <div style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' }}>
+                        <Lock size={38} style={{ color: 'var(--red)', marginBottom: '10px' }} />
+                        <h3>Sign in to manage your profile</h3>
+                        <p style={{ color: 'var(--text2)', margin: '6px 0 18px' }}>Profile details are loaded from your secure server session and are not stored in this browser.</p>
+                        <button type="button" className="btn-submit-modal" style={{ width: 'auto', padding: '9px 22px' }} onClick={() => setAuthMode('login')}>Sign In</button>
+                      </div>
+                    ) : !isEditingProfile ? (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
                         <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Full Name</span>
                           <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.name || '-'}</p>
@@ -645,55 +656,17 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                           <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Postcode</span>
                           <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.postcode || '-'}</p>
                         </div>
-                      </div>
+                        </div>
+                        <div style={{ marginTop: '24px', padding: '18px', border: '1px solid #FCA5A5', borderRadius: 'var(--radius)', background: '#FEF2F2' }}>
+                          <h4 style={{ color: '#991B1B', margin: 0 }}>Delete account</h4>
+                          <p style={{ color: '#7F1D1D', fontSize: '0.82rem', margin: '6px 0 12px' }}>Your account will be disabled and personal details in historical orders will be anonymised. This cannot be undone.</p>
+                          <button type="button" disabled={isDeletingAccount} onClick={handleDeleteAccount} className="mode-btn" style={{ border: '1px solid #DC2626', color: '#B91C1C', background: '#FFF', padding: '8px 14px' }}>
+                            {isDeletingAccount ? 'Deleting…' : 'Delete my account'}
+                          </button>
+                        </div>
+                      </>
                     ) : (
                       <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                        <div style={{ background: 'var(--surface-alt)', padding: '18px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <label style={{ fontSize: '0.9rem', fontWeight: 900, marginBottom: '12px', display: 'block' }}>Profile Avatar</label>
-                          <div style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <div style={{ position: 'relative', cursor: 'pointer', width: 64, height: 64 }} onClick={() => fileInputRef.current?.click()}>
-                              {profileForm.avatarUrl ? (
-                                <img src={profileForm.avatarUrl} alt="Preview" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }} />
-                              ) : profileForm.avatarPreset ? (
-                                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, var(--red), var(--amber))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }}>
-                                  {AVATAR_PRESETS.find(p => p.id === profileForm.avatarPreset)?.label.split(' ')[0] || '👑'}
-                                </div>
-                              ) : (
-                                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--border)', color: 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 900, border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }}>
-                                  {profileForm.name ? profileForm.name.charAt(0).toUpperCase() : 'U'}
-                                </div>
-                              )}
-                              <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--red)', borderRadius: '50%', padding: '5px', color: '#FFF', boxShadow: 'var(--shadow-sm)' }}>
-                                <Camera size={12} />
-                              </div>
-                            </div>
-                            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
-                            
-                            <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '18px' }}>
-                              <p style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px', margin: 0 }}>Or choose a preset:</p>
-                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                {AVATAR_PRESETS.map(preset => (
-                                  <button 
-                                    key={preset.id} 
-                                    type="button" 
-                                    onClick={() => selectPreset(preset.id)} 
-                                    title={preset.label}
-                                    style={{ 
-                                      width: 38, height: 38, borderRadius: '50%', fontSize: '16px', 
-                                      background: profileForm.avatarPreset === preset.id ? 'var(--red-light)' : '#FFF', 
-                                      border: profileForm.avatarPreset === preset.id ? '2px solid var(--red)' : '1px solid var(--border)', 
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                      cursor: 'pointer', transition: 'all 0.15s', boxShadow: 'var(--shadow-sm)' 
-                                    }}
-                                  >
-                                    {preset.label.split(' ')[0]}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', background: 'var(--surface-alt)', padding: '18px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
                           <div>
                             <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Full Name</label>
@@ -701,7 +674,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                           </div>
                           <div>
                             <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Email Address</label>
-                            <div className="input-group"><Mail size={15} /><input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} required style={{ padding: '8px 12px', fontSize: '0.88rem' }} /></div>
+                            <div className="input-group"><Mail size={15} /><input value={profileForm.email} readOnly aria-readonly="true" style={{ padding: '8px 12px', fontSize: '0.88rem', background: 'var(--surface-alt)' }} /></div>
                           </div>
                           <div>
                             <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Phone Number</label>
@@ -718,7 +691,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                         </div>
                         
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <button type="submit" className="btn-submit-modal" style={{ padding: '10px 24px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Save size={15} /> Save Changes</button>
+                          <button type="submit" disabled={isSavingProfile} className="btn-submit-modal" style={{ padding: '10px 24px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Save size={15} /> {isSavingProfile ? 'Saving…' : 'Save Changes'}</button>
                         </div>
                       </form>
                     )}
@@ -785,30 +758,9 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                       {/* Claim Reward Action */}
                       <div style={{ maxWidth: '340px', margin: '0 auto' }}>
-                        {loyaltyCount >= 8 ? (
-                          <button
-                            type="button"
-                            className="btn-submit-modal"
-                            onClick={() => {
-                              confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
-                              if (navigator.clipboard?.writeText) navigator.clipboard.writeText('LOYAL15');
-                              if (showToast) showToast('🎉 Reward Claimed! Voucher LOYAL15 (15% OFF) copied to clipboard!', 'success');
-                            }}
-                            style={{
-                              width: '100%', padding: '12px', fontSize: '1rem', fontWeight: 900,
-                              background: 'linear-gradient(135deg, var(--amber), #D97706)', color: '#FFF',
-                              border: 'none', borderRadius: 'var(--radius-full)', cursor: 'pointer',
-                              boxShadow: '0 6px 18px rgba(217, 119, 6, 0.35)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
-                            }}
-                          >
-                            <Award size={18} /> Claim 15% OFF Voucher
-                          </button>
-                        ) : (
-                          <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 700 }}>
-                            🔒 Place {8 - loyaltyCount} more {8 - loyaltyCount === 1 ? 'order' : 'orders'} to unlock!
-                          </div>
-                        )}
+                        <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '0.82rem', color: 'var(--text2)', fontWeight: 700 }}>
+                          Loyalty progress shown here is an estimate from this browser session. Reward claiming will be enabled when server-issued vouchers are available.
+                        </div>
                       </div>
                     </div>
 
@@ -837,26 +789,12 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                             <span style={{ fontSize: '18px' }}>🥈</span>
                             <div>
                               <strong style={{ display: 'block', color: 'var(--text)', fontSize: '0.9rem', fontWeight: 800 }}>Silver Connoisseur (4 Stamps)</strong>
-                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Unlock Free Side or Drink voucher (FREESIDE)</span>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Future server-issued free side or drink reward</span>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (loyaltyCount < 4) return;
-                              if (navigator.clipboard?.writeText) navigator.clipboard.writeText('FREESIDE');
-                              if (showToast) showToast('Voucher FREESIDE copied to clipboard!', 'success');
-                            }}
-                            style={{
-                              background: loyaltyCount >= 4 ? 'var(--green)' : 'var(--surface-alt)',
-                              color: loyaltyCount >= 4 ? '#FFF' : 'var(--text3)',
-                              border: 'none', padding: '5px 12px', borderRadius: 'var(--radius-full)',
-                              fontWeight: 800, fontSize: '0.75rem', cursor: loyaltyCount >= 4 ? 'pointer' : 'default',
-                              display: 'flex', alignItems: 'center', gap: '4px'
-                            }}
-                          >
-                            {loyaltyCount >= 4 ? <><Copy size={12} /> Copy Code</> : 'Locked'}
-                          </button>
+                          <span style={{ background: 'var(--surface-alt)', color: 'var(--text3)', padding: '5px 12px', borderRadius: 'var(--radius-full)', fontWeight: 800, fontSize: '0.75rem' }}>
+                            Server voucher required
+                          </span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
@@ -864,7 +802,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                             <span style={{ fontSize: '18px' }}>🥇</span>
                             <div>
                               <strong style={{ display: 'block', color: 'var(--text)', fontSize: '0.9rem', fontWeight: 800 }}>Gold VIP Master (8 Stamps)</strong>
-                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Unlock 15% OFF entire order voucher (LOYAL15)</span>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Future server-issued order discount reward</span>
                             </div>
                           </div>
                           <span style={{ fontWeight: 900, color: loyaltyCount >= 8 ? 'var(--amber)' : 'var(--text3)', background: loyaltyCount >= 8 ? '#FEF3C7' : 'var(--surface-alt)', padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem' }}>
@@ -877,29 +815,10 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 )}
 
                 {activeTab === 'vouchers' && (
-                  <div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
-                      {[
-                        { code: 'FIRST10', title: '10% OFF First Order', desc: 'Welcome bonus for new customers.' },
-                        { code: 'OVER25', title: '10% OFF Orders over £25', desc: 'Valid on delivery & collection.' },
-                        { code: 'RFC10', title: '10% OFF Special Deal', desc: 'Exclusive app & website offer.' },
-                      ].map((v, i) => (
-                        <div key={i} style={{ background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                          <div>
-                            <span style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontWeight: 900, fontSize: '0.82rem', letterSpacing: '1px' }}>{v.code}</span>
-                            <h3 style={{ fontWeight: 900, fontSize: '1.05rem', marginTop: '12px', fontFamily: 'var(--font-head)' }}>{v.title}</h3>
-                            <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '4px', margin: 0 }}>{v.desc}</p>
-                          </div>
-                          <button 
-                            className="btn-add-item" 
-                            onClick={() => { navigator.clipboard.writeText(v.code); if (showToast) showToast(`Voucher ${v.code} copied to clipboard!`); }} 
-                            style={{ width: '100%', marginTop: '16px', padding: '8px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                          >
-                            <Copy size={14} /> Copy Code
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ textAlign: 'center', padding: '44px 20px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' }}>
+                    <Tag size={42} style={{ color: 'var(--red)', marginBottom: '10px' }} />
+                    <h3>No server-issued vouchers</h3>
+                    <p style={{ color: 'var(--text2)', marginTop: '6px' }}>Eligible vouchers will appear here after the account rewards service is enabled.</p>
                   </div>
                 )}
 
@@ -919,7 +838,10 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
         onClose={() => setCancelModalOrder(null)}
         order={cancelModalOrder}
         onConfirmCancel={(orderId, reason) => {
-          if (onCancelOrder) onCancelOrder(orderId, reason);
+          if (!onCancelOrder) return;
+          Promise.resolve(onCancelOrder(orderId, reason)).then(() => {
+            if (isAuthenticated) loadAccountOrders();
+          });
         }}
       />
     </div>

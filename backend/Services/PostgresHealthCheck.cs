@@ -54,6 +54,15 @@ public static class ProgramConnectionStringNormalizer
         var password = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(1) ?? string.Empty);
         var database = uri.AbsolutePath.TrimStart('/');
 
-        return $"Host={uri.Host};Port={uri.Port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true;";
+        return new NpgsqlConnectionStringBuilder
+        {
+            Host = uri.Host,
+            Port = uri.IsDefaultPort ? 5432 : uri.Port,
+            Database = database,
+            Username = username,
+            Password = password,
+            SslMode = SslMode.VerifyFull,
+            Pooling = true
+        }.ConnectionString;
     }
 }

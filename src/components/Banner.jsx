@@ -4,13 +4,9 @@ import {
   Clock,
   Star,
   ShoppingBag,
-  Scissors,
   Copy,
-  MapPin,
-  Phone,
   ExternalLink,
   ArrowRight,
-  Sparkles,
   Tag
 } from 'lucide-react';
 

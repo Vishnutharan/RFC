@@ -59,10 +59,45 @@ public class OrdersController : ControllerBase
     {
         if (_db == null) return ServiceUnavailable();
         var cancellationToken = HttpContext.RequestAborted;
+        Order? paidOrderPendingPersistence = null;
+        var orderPersisted = false;
 
         try
         {
             order = SanitizeOrder(order);
+            string? authenticatedCustomerId = null;
+            if (order.PaymentMethod == "card")
+            {
+                authenticatedCustomerId = GetAuthenticatedCustomerId();
+                if (string.IsNullOrWhiteSpace(authenticatedCustomerId))
+                {
+                    return Unauthorized(new { message = "Sign in before paying by card." });
+                }
+
+                if (!Guid.TryParse(order.CheckoutId, out var checkoutGuid))
+                {
+                    return BadRequest(new { message = "A valid checkout id is required for card payment." });
+                }
+                if (string.IsNullOrWhiteSpace(order.StripePaymentIntentId))
+                {
+                    return BadRequest(new { message = "A confirmed card payment is required." });
+                }
+
+                order.CheckoutId = checkoutGuid.ToString("N");
+                var existingPaymentOrder = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(
+                    existing => existing.StripePaymentIntentId == order.StripePaymentIntentId ||
+                                existing.CheckoutId == order.CheckoutId,
+                    cancellationToken);
+                if (existingPaymentOrder != null)
+                {
+                    if (existingPaymentOrder.CustomerId == authenticatedCustomerId)
+                    {
+                        return Ok(MapToOrderDto(existingPaymentOrder));
+                    }
+
+                    return Conflict(new { message = "This card payment has already been used for an order." });
+                }
+            }
 
             var openingHours = await ValidateOpeningHoursAsync();
             if (!openingHours.IsOpen)
@@ -83,15 +118,32 @@ public class OrdersController : ControllerBase
                 var paymentCheck = await _payments.VerifyPaymentIntentAsync(
                     pricedOrder.StripePaymentIntentId,
                     pricedOrder.Total,
+                    authenticatedCustomerId!,
+                    pricedOrder.CheckoutId!,
                     cancellationToken);
                 if (!paymentCheck.IsValid)
                 {
+                    if (paymentCheck.ShouldCompensate)
+                    {
+                        var compensation = await CompensateUnpersistedPaymentAsync(
+                            pricedOrder,
+                            "checkout-verification-mismatch",
+                            cancellationToken);
+                        if (!compensation.IsValid) return ServiceUnavailable();
+
+                        return Conflict(new
+                        {
+                            message = "The completed card payment no longer matched this checkout and has been refunded. Please refresh your basket and try again."
+                        });
+                    }
+
                     return paymentCheck.IsServiceUnavailable
                         ? ServiceUnavailable()
                         : BadRequest(new { message = paymentCheck.Message });
                 }
 
                 pricedOrder.PaymentStatus = "Paid";
+                paidOrderPendingPersistence = pricedOrder;
             }
 
             var now = DateTime.UtcNow;
@@ -99,9 +151,7 @@ public class OrdersController : ControllerBase
             pricedOrder.OrderNumber = await GenerateUniqueOrderNumberAsync();
             pricedOrder.CreatedAt = now;
             pricedOrder.OrderStatus = "Placed";
-            pricedOrder.OrderTime = string.IsNullOrWhiteSpace(pricedOrder.OrderTime)
-                ? now.ToString("dd MMM yyyy, HH:mm:ss")
-                : pricedOrder.OrderTime;
+            pricedOrder.OrderTime = now.ToString("dd MMM yyyy, HH:mm:ss");
             pricedOrder.AccessToken = OrderAccessService.CreateAccessToken();
 
             if (pricedOrder.OrderType == "delivery")
@@ -116,10 +166,51 @@ public class OrdersController : ControllerBase
             }
 
             await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+            if (pricedOrder.PaymentMethod == "card")
+            {
+                if (_db.Database.IsRelational())
+                {
+                    // Serialise finalisation for a checkout before relying on the
+                    // unique indexes. Without this lock, a concurrent loser could
+                    // refund a payment already committed by the winning request.
+                    await _db.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT pg_advisory_xact_lock(hashtextextended({pricedOrder.CheckoutId!}, 0));",
+                        cancellationToken);
+                }
+
+                var concurrentlyPersistedOrder = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(
+                    existing => existing.StripePaymentIntentId == pricedOrder.StripePaymentIntentId ||
+                                existing.CheckoutId == pricedOrder.CheckoutId,
+                    cancellationToken);
+                if (concurrentlyPersistedOrder != null)
+                {
+                    if (concurrentlyPersistedOrder.CustomerId == authenticatedCustomerId)
+                    {
+                        return Ok(MapToOrderDto(concurrentlyPersistedOrder));
+                    }
+
+                    return Conflict(new { message = "This card payment has already been used for an order." });
+                }
+            }
+
             var stockCheck = await DecrementStockAsync(pricedOrder);
             if (!stockCheck.IsValid)
             {
                 await transaction.RollbackAsync(cancellationToken);
+                if (paidOrderPendingPersistence != null)
+                {
+                    var refund = await CompensateUnpersistedPaymentAsync(
+                        paidOrderPendingPersistence,
+                        "stock-unavailable",
+                        cancellationToken);
+                    if (!refund.IsValid) return ServiceUnavailable();
+
+                    return Conflict(new
+                    {
+                        message = "Stock changed during checkout. The card payment has been refunded; no order was placed."
+                    });
+                }
+
                 return BadRequest(new { message = stockCheck.Message });
             }
 
@@ -128,20 +219,51 @@ public class OrdersController : ControllerBase
             dbOrder.OrderAccessTokenHash = OrderAccessService.HashAccessToken(pricedOrder.AccessToken);
             dbOrder.OrderAccessTokenExpiresAt = now.Add(OrderAccessService.GuestAccessTokenLifetime);
             _db.Orders.Add(dbOrder);
+            if (string.Equals(pricedOrder.VoucherCode, "FIRST10", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(dbOrder.CustomerId))
+            {
+                _db.VoucherRedemptions.Add(new VoucherRedemption
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Code = "FIRST10",
+                    CustomerId = dbOrder.CustomerId,
+                    OrderId = dbOrder.Id,
+                    RedeemedAt = now
+                });
+            }
+
             await _db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            orderPersisted = true;
 
-            _notifications.SendOrderPlacedInBackground(pricedOrder);
+            await _notifications.SendOrderPlacedAsync(pricedOrder);
+            pricedOrder.StripePaymentIntentId = null;
+            pricedOrder.CheckoutId = null;
             return Ok(pricedOrder);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create order.");
+            if (paidOrderPendingPersistence != null && !orderPersisted)
+            {
+                var refund = await CompensateUnpersistedPaymentAsync(
+                    paidOrderPendingPersistence,
+                    "order-persistence-failed",
+                    CancellationToken.None);
+                if (!refund.IsValid)
+                {
+                    _logger.LogCritical(
+                        "Manual reconciliation required for payment {PaymentIntentId}; order persistence and automatic refund both failed.",
+                        paidOrderPendingPersistence.StripePaymentIntentId);
+                }
+            }
+
             return ServiceUnavailable();
         }
     }
 
     [HttpGet("{idOrNumber}")]
+    [EnableRateLimiting("order-read")]
     public async Task<IActionResult> GetOrder(string idOrNumber)
     {
         if (_db == null) return ServiceUnavailable();
@@ -158,7 +280,7 @@ public class OrdersController : ControllerBase
             if (!_orderAccess.HasAccess(dbOrder, User, accessToken))
             {
                 await _orderAccess.AuditDeniedAsync("OrderReadDenied", dbOrder, accessToken, "ownership proof failed");
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not allowed to access this order." });
+                return NotFound(new { message = "Order not found." });
             }
 
             return Ok(MapToOrderDto(dbOrder));
@@ -171,6 +293,7 @@ public class OrdersController : ControllerBase
     }
 
     [HttpGet("{idOrNumber}/eta")]
+    [EnableRateLimiting("order-read")]
     public async Task<IActionResult> RefreshEta(string idOrNumber)
     {
         if (_db == null) return ServiceUnavailable();
@@ -188,7 +311,7 @@ public class OrdersController : ControllerBase
             if (!_orderAccess.HasAccess(dbOrder, User, accessToken))
             {
                 await _orderAccess.AuditDeniedAsync("OrderEtaRefreshDenied", dbOrder, accessToken, "ownership proof failed");
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not allowed to access this order." });
+                return NotFound(new { message = "Order not found." });
             }
 
             if (dbOrder.OrderType == "delivery" &&
@@ -233,11 +356,11 @@ public class OrdersController : ControllerBase
                 cancellationToken);
             if (dbOrder == null) return NotFound(new { message = "Order not found" });
 
-            var accessToken = OrderAccessService.GetAccessToken(Request, request.AccessToken);
+            var accessToken = OrderAccessService.GetAccessToken(Request);
             if (!_orderAccess.HasAccess(dbOrder, User, accessToken))
             {
                 await _orderAccess.AuditDeniedAsync("OrderCancelDenied", dbOrder, accessToken, "ownership proof failed");
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You are not allowed to cancel this order." });
+                return NotFound(new { message = "Order not found." });
             }
 
             if (!CustomerCancellableStatuses.Contains(dbOrder.OrderStatus))
@@ -247,11 +370,17 @@ public class OrdersController : ControllerBase
 
             var oldStatus = dbOrder.OrderStatus;
             var oldPaymentStatus = dbOrder.PaymentStatus;
+            if (!await TryReserveCancellationAsync(dbOrder, oldStatus, cancellationToken))
+            {
+                return Conflict(new { message = "This order changed while the cancellation was being processed. Refresh and try again." });
+            }
+
             if (dbOrder.PaymentMethod == "card" && dbOrder.PaymentStatus == "Paid")
             {
                 var refundCheck = await RefundStripePaymentAsync(dbOrder, cancellationToken);
                 if (!refundCheck.IsValid)
                 {
+                    await RestoreCancellationReservationAsync(dbOrder, oldStatus, oldPaymentStatus, cancellationToken);
                     return refundCheck.IsServiceUnavailable
                         ? ServiceUnavailable()
                         : BadRequest(new { message = refundCheck.Message });
@@ -275,7 +404,7 @@ public class OrdersController : ControllerBase
                     new { orderStatus = dbOrder.OrderStatus, paymentStatus = dbOrder.PaymentStatus, reason = dbOrder.CancellationReason });
             }
 
-            _notifications.SendCancellationEmailInBackground(dbOrder, dbOrder.CancellationReason);
+            await _notifications.SendCancellationEmailAsync(dbOrder, dbOrder.CancellationReason);
             return Ok(MapToOrderDto(dbOrder));
         }
         catch (Exception ex)
@@ -322,7 +451,8 @@ public class OrdersController : ControllerBase
             OrderStatus = dbOrder.OrderStatus,
             OrderTime = dbOrder.OrderTime,
             CancellationReason = dbOrder.CancellationReason,
-            StripePaymentIntentId = dbOrder.StripePaymentIntentId,
+            StripePaymentIntentId = null,
+            CheckoutId = null,
             DeliveryLat = dbOrder.DeliveryLat,
             DeliveryLng = dbOrder.DeliveryLng,
             EtaMinutes = dbOrder.EtaMinutes,
@@ -356,6 +486,7 @@ public class OrdersController : ControllerBase
             OrderTime = order.OrderTime,
             CancellationReason = order.CancellationReason,
             StripePaymentIntentId = order.StripePaymentIntentId,
+            CheckoutId = order.CheckoutId,
             DeliveryLat = order.DeliveryLat,
             DeliveryLng = order.DeliveryLng,
             EtaMinutes = order.EtaMinutes,
@@ -401,8 +532,23 @@ public class OrdersController : ControllerBase
         {
             if (string.IsNullOrWhiteSpace(group.Key)) return new StockCheck(false, "One or more menu items are unavailable.");
 
-            var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key, HttpContext.RequestAborted);
             var requested = group.Sum(item => item.Quantity);
+            if (_db.Database.IsRelational())
+            {
+                var updated = await _db.MenuItems
+                    .Where(item => item.Id == group.Key && item.IsAvailable && item.StockCount >= requested)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(item => item.StockCount, item => item.StockCount - requested),
+                        HttpContext.RequestAborted);
+                if (updated != 1)
+                {
+                    return new StockCheck(false, $"{group.First().Name} is currently out of stock.");
+                }
+
+                continue;
+            }
+
+            var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key, HttpContext.RequestAborted);
             if (menuItem == null || menuItem.StockCount < requested)
             {
                 return new StockCheck(false, $"{group.First().Name} is currently out of stock.");
@@ -422,8 +568,19 @@ public class OrdersController : ControllerBase
         foreach (var group in items.GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(group.Key)) continue;
+            var quantity = group.Sum(item => item.Quantity);
+            if (_db.Database.IsRelational())
+            {
+                await _db.MenuItems
+                    .Where(item => item.Id == group.Key)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(item => item.StockCount, item => item.StockCount + quantity),
+                        HttpContext.RequestAborted);
+                continue;
+            }
+
             var menuItem = await _db.MenuItems.FirstOrDefaultAsync(item => item.Id == group.Key, HttpContext.RequestAborted);
-            if (menuItem != null) menuItem.StockCount += group.Sum(item => item.Quantity);
+            if (menuItem != null) menuItem.StockCount += quantity;
         }
     }
 
@@ -481,7 +638,10 @@ public class OrdersController : ControllerBase
 
     private async Task<PaymentGatewayResult> RefundStripePaymentAsync(DbOrder order, CancellationToken cancellationToken)
     {
-        var result = await _payments.RefundPaymentIntentAsync(order.StripePaymentIntentId, cancellationToken);
+        var result = await _payments.RefundPaymentIntentAsync(
+            order.StripePaymentIntentId,
+            $"rfc-order-refund:{order.Id}",
+            cancellationToken);
         if (result.IsValid)
         {
             order.PaymentStatus = "Refunded";
@@ -507,6 +667,83 @@ public class OrdersController : ControllerBase
         return result;
     }
 
+    private async Task<PaymentGatewayResult> CompensateUnpersistedPaymentAsync(
+        Order order,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var checkoutId = order.CheckoutId ?? order.StripePaymentIntentId ?? Guid.NewGuid().ToString("N");
+        var result = await _payments.RefundPaymentIntentAsync(
+            order.StripePaymentIntentId,
+            $"rfc-checkout-refund:{checkoutId}",
+            cancellationToken);
+
+        if (!result.IsValid && _audit != null)
+        {
+            await _audit.LogAsync(
+                "CheckoutCompensationFailed",
+                "PaymentIntent",
+                order.StripePaymentIntentId,
+                null,
+                new { reason, result.Message, result.IsServiceUnavailable });
+        }
+
+        return result;
+    }
+
+    private async Task<bool> TryReserveCancellationAsync(
+        DbOrder order,
+        string expectedStatus,
+        CancellationToken cancellationToken)
+    {
+        const string pendingStatus = "Cancellation Pending";
+        if (_db == null) return false;
+
+        if (_db.Database.IsRelational())
+        {
+            var updated = await _db.Orders
+                .Where(item => item.Id == order.Id && item.OrderStatus == expectedStatus)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.OrderStatus, pendingStatus),
+                    cancellationToken);
+            if (updated != 1) return false;
+            order.OrderStatus = pendingStatus;
+            return true;
+        }
+
+        order.OrderStatus = pendingStatus;
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task RestoreCancellationReservationAsync(
+        DbOrder order,
+        string originalStatus,
+        string originalPaymentStatus,
+        CancellationToken cancellationToken)
+    {
+        if (_db == null) return;
+
+        if (_db.Database.IsRelational())
+        {
+            await _db.Orders
+                .Where(item => item.Id == order.Id && item.OrderStatus == "Cancellation Pending")
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(item => item.OrderStatus, originalStatus)
+                    .SetProperty(item => item.PaymentStatus, originalPaymentStatus),
+                    cancellationToken);
+        }
+        else
+        {
+            order.OrderStatus = originalStatus;
+            order.PaymentStatus = originalPaymentStatus;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        order.OrderStatus = originalStatus;
+        order.PaymentStatus = originalPaymentStatus;
+    }
+
     private static Order SanitizeOrder(Order order)
     {
         order.CustomerName = InputSanitizer.Clean(order.CustomerName, 100);
@@ -517,7 +754,12 @@ public class OrdersController : ControllerBase
         order.DeliveryNotes = InputSanitizer.Clean(order.DeliveryNotes, 500);
         order.VoucherCode = InputSanitizer.CleanNullable(order.VoucherCode, 50);
         order.PaymentMethod = order.PaymentMethod == "cash" ? "cash" : "card";
-        order.StripePaymentIntentId = InputSanitizer.CleanNullable(order.StripePaymentIntentId, 200);
+        order.StripePaymentIntentId = order.PaymentMethod == "card"
+            ? InputSanitizer.CleanNullable(order.StripePaymentIntentId, 200)
+            : null;
+        order.CheckoutId = order.PaymentMethod == "card"
+            ? InputSanitizer.CleanNullable(order.CheckoutId, 80)
+            : null;
         return order;
     }
 

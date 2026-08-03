@@ -51,17 +51,40 @@ export default function App() {
   const { adminUser, setAdminUser } = useAuth();
   const cart = useCart(showToast);
   const orders = useOrders(showToast);
+  const { getAccessToken, rememberAccessToken, setActiveOrder } = orders;
 
   useEffect(() => {
     const match = window.location.pathname.match(/^\/track\/([^/]+)/);
     if (!match) return undefined;
 
     let isActive = true;
-    const accessToken = new URLSearchParams(window.location.search).get('accessToken') || undefined;
-    getOrder(decodeURIComponent(match[1]), accessToken)
+    const orderReference = decodeURIComponent(match[1]);
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const linkAccessToken = query.get('accessToken') || hash.get('accessToken') || undefined;
+    const accessToken = linkAccessToken || getAccessToken(orderReference);
+
+    if (linkAccessToken) {
+      rememberAccessToken(orderReference, linkAccessToken);
+      query.delete('accessToken');
+      hash.delete('accessToken');
+      const cleanSearch = query.toString();
+      const cleanHash = hash.toString();
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${window.location.pathname}${cleanSearch ? `?${cleanSearch}` : ''}${cleanHash ? `#${cleanHash}` : ''}`
+      );
+    }
+
+    getOrder(orderReference, accessToken)
       .then((trackedOrder) => {
         if (!isActive) return;
-        orders.setActiveOrder({
+        if (accessToken) {
+          rememberAccessToken(trackedOrder?.id || orderReference, accessToken);
+          rememberAccessToken(trackedOrder?.orderNumber || orderReference, accessToken);
+        }
+        setActiveOrder({
           ...(trackedOrder || {}),
           accessToken: trackedOrder?.accessToken || accessToken
         });
@@ -73,7 +96,7 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [orders.setActiveOrder, showToast]);
+  }, [getAccessToken, rememberAccessToken, setActiveOrder, showToast]);
 
   useEffect(() => {
     let isActive = true;
@@ -198,6 +221,7 @@ export default function App() {
             onReorder={handleReorder}
             onPrintReceipt={(order) => setPrintReceiptOrder(order)}
             onCancelOrder={handleCancelOrder}
+            onAccountDeleted={orders.clearOrders}
             showToast={showToast}
           />
         </ErrorBoundary>

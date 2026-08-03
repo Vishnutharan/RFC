@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using RFC.Api.Data;
 using RFC.Api.Models;
@@ -12,31 +13,52 @@ public sealed class OrderPricingService
     private const decimal DeliveryFee = 2.50m;
     private const decimal DeliveryMinimumSpend = 15.00m;
 
-    private static readonly IReadOnlyDictionary<string, decimal> OptionPriceMap =
+    private static readonly IReadOnlyDictionary<string, decimal> SidePriceMap =
         new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
         {
+            ["Regular Fries"] = 0m,
+            ["Beans"] = 0m,
+            ["Coleslaw"] = 0m,
+            ["Corn on the Cob"] = 0m,
+            ["Gravy"] = 0m,
             ["Wedges"] = 0.80m,
-            ["Wedges (+GBP0.80)"] = 0.80m,
+            ["Wedges (+GBP0.80)"] = 0.80m
+        };
+
+    private static readonly IReadOnlyDictionary<string, decimal> DrinkPriceMap =
+        new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Pepsi 330ml"] = 0m,
+            ["7Up 330ml"] = 0m,
+            ["Diet Pepsi 330ml"] = 0m,
+            ["Tango Orange 330ml"] = 0m,
+            ["Still Water 500ml"] = 0m,
             ["Pepsi 1.5L Bottle"] = 2.00m,
             ["Pepsi 1.5L (+GBP2.00)"] = 2.00m
         };
 
     private readonly RfcDbContext? _db;
     private readonly DeliveryRadiusService _deliveryRadius;
+    private readonly IHttpContextAccessor? _httpContextAccessor;
     private readonly ILogger<OrderPricingService> _logger;
 
     public OrderPricingService(IServiceProvider provider, DeliveryRadiusService deliveryRadius, ILogger<OrderPricingService> logger)
     {
         _db = provider.GetService<RfcDbContext>();
+        _httpContextAccessor = provider.GetService<IHttpContextAccessor>();
         _deliveryRadius = deliveryRadius;
         _logger = logger;
     }
 
     public async Task<OrderPricingResult> PriceAsync(Order order)
     {
-        if (order.Items.Count == 0)
+        if (order.Items == null || order.Items.Count == 0)
         {
             return OrderPricingResult.Fail("Order items cannot be empty.");
+        }
+        if (order.Items.Count > 25 || order.Items.Sum(item => item.Quantity) > 50)
+        {
+            return OrderPricingResult.Fail("An order can contain at most 25 lines and 50 items.");
         }
 
         var menuItems = await GetMenuItemsAsync();
@@ -53,6 +75,10 @@ public sealed class OrderPricingService
         var requestedStock = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var requestedItem in order.Items)
         {
+            if (requestedItem == null)
+            {
+                return OrderPricingResult.Fail("One or more order items are invalid.");
+            }
             if (requestedItem.Quantity is < 1 or > 20)
             {
                 return OrderPricingResult.Fail("Item quantities must be between 1 and 20.");
@@ -70,17 +96,30 @@ public sealed class OrderPricingService
                 return OrderPricingResult.Fail($"{menuItem.Name} is currently out of stock.");
             }
 
-            var unitPrice = RoundMoney(menuItem.Price + CalculateOptionTotal(requestedItem));
+            var selectedSide = CleanOption(requestedItem.SelectedSide);
+            var selectedDrink = CleanOption(requestedItem.SelectedDrink);
+            var submittedOptions = requestedItem.Options ?? [];
+            if (!ValidateOptions(menuItem, selectedSide, selectedDrink, submittedOptions))
+            {
+                return OrderPricingResult.Fail($"One or more options for {menuItem.Name} are invalid. Please refresh the menu.");
+            }
+
+            var unitPrice = RoundMoney(menuItem.Price + CalculateOptionTotal(selectedSide, selectedDrink));
+            var normalizedOptions = new[] { selectedSide, selectedDrink }
+                .OfType<string>()
+                .Where(option => !string.IsNullOrWhiteSpace(option))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
             normalizedItems.Add(new OrderItem
             {
                 Id = menuItem.Id,
                 Name = menuItem.Name,
                 Item = menuItem,
                 Quantity = requestedItem.Quantity,
-                SelectedSide = CleanOption(requestedItem.SelectedSide),
-                SelectedDrink = CleanOption(requestedItem.SelectedDrink),
+                SelectedSide = selectedSide,
+                SelectedDrink = selectedDrink,
                 Notes = CleanOption(requestedItem.Notes),
-                Options = requestedItem.Options.Select(CleanOption).OfType<string>().Where(option => !string.IsNullOrWhiteSpace(option)).ToList(),
+                Options = normalizedOptions,
                 Price = unitPrice,
                 UnitPrice = unitPrice
             });
@@ -95,13 +134,17 @@ public sealed class OrderPricingService
             }
 
             var deliveryCheck = await _deliveryRadius.CheckAsync(order.DeliveryPostcode);
+            if (deliveryCheck.IsServiceUnavailable)
+            {
+                return OrderPricingResult.Fail(ServiceUnavailableMessage);
+            }
             if (!deliveryCheck.IsEligible)
             {
                 return OrderPricingResult.Fail(deliveryCheck.Reason);
             }
         }
 
-        var voucher = ValidateVoucher(order.VoucherCode, subtotal);
+        var voucher = await ValidateVoucherAsync(order.VoucherCode, subtotal);
         if (!voucher.IsValid)
         {
             return OrderPricingResult.Fail(voucher.Message);
@@ -166,16 +209,57 @@ public sealed class OrderPricingService
         return item.Id;
     }
 
-    private static decimal CalculateOptionTotal(OrderItem item)
+    private static bool ValidateOptions(
+        MenuItem menuItem,
+        string? selectedSide,
+        string? selectedDrink,
+        IReadOnlyCollection<string> submittedOptions)
     {
-        var labels = new List<string>();
-        if (!string.IsNullOrWhiteSpace(item.SelectedSide)) labels.Add(item.SelectedSide);
-        if (!string.IsNullOrWhiteSpace(item.SelectedDrink)) labels.Add(item.SelectedDrink);
-        labels.AddRange(item.Options.Where(option => !string.IsNullOrWhiteSpace(option)));
+        if (!menuItem.HasOptions)
+        {
+            return string.IsNullOrWhiteSpace(selectedSide) &&
+                   string.IsNullOrWhiteSpace(selectedDrink) &&
+                   submittedOptions.Count == 0;
+        }
 
-        return labels
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Sum(label => OptionPriceMap.TryGetValue(NormalizeOptionLabel(label), out var price) ? price : 0m);
+        if (!string.IsNullOrWhiteSpace(selectedSide) &&
+            !SidePriceMap.ContainsKey(NormalizeOptionLabel(selectedSide)))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedDrink) &&
+            !DrinkPriceMap.ContainsKey(NormalizeOptionLabel(selectedDrink)))
+        {
+            return false;
+        }
+
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(selectedSide)) selected.Add(NormalizeOptionLabel(selectedSide));
+        if (!string.IsNullOrWhiteSpace(selectedDrink)) selected.Add(NormalizeOptionLabel(selectedDrink));
+
+        return submittedOptions.Count <= 2 && submittedOptions
+            .Select(CleanOption)
+            .OfType<string>()
+            .All(option => selected.Contains(NormalizeOptionLabel(option)));
+    }
+
+    private static decimal CalculateOptionTotal(string? selectedSide, string? selectedDrink)
+    {
+        var total = 0m;
+        if (!string.IsNullOrWhiteSpace(selectedSide) &&
+            SidePriceMap.TryGetValue(NormalizeOptionLabel(selectedSide), out var sidePrice))
+        {
+            total += sidePrice;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedDrink) &&
+            DrinkPriceMap.TryGetValue(NormalizeOptionLabel(selectedDrink), out var drinkPrice))
+        {
+            total += drinkPrice;
+        }
+
+        return total;
     }
 
     private static string NormalizeOptionLabel(string value)
@@ -191,7 +275,7 @@ public sealed class OrderPricingService
         return RFC.Api.Security.InputSanitizer.Clean(value, 500);
     }
 
-    private static VoucherValidation ValidateVoucher(string? code, decimal subtotal)
+    private async Task<VoucherValidation> ValidateVoucherAsync(string? code, decimal subtotal)
     {
         if (string.IsNullOrWhiteSpace(code)) return new(true, null, 0m, string.Empty);
 
@@ -205,6 +289,24 @@ public sealed class OrderPricingService
         if (subtotal < voucher.MinSpend)
         {
             return new(false, clean, 0m, $"Code {clean} requires minimum spend of GBP {voucher.MinSpend:0.00}.");
+        }
+
+        if (clean == "FIRST10")
+        {
+            var customerId = _httpContextAccessor?.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(customerId) || _db == null)
+            {
+                return new(false, clean, 0m, "FIRST10 is available to signed-in customers on their first order.");
+            }
+
+            var alreadyRedeemed = await _db.VoucherRedemptions.AsNoTracking()
+                .AnyAsync(item => item.Code == clean && item.CustomerId == customerId);
+            var hasPreviousOrder = await _db.Orders.AsNoTracking()
+                .AnyAsync(order => order.CustomerId == customerId);
+            if (alreadyRedeemed || hasPreviousOrder)
+            {
+                return new(false, clean, 0m, "FIRST10 has already been used for this account.");
+            }
         }
 
         return new(true, clean, voucher.DiscountPercent, string.Empty);

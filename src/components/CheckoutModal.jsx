@@ -1,34 +1,91 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import confetti from 'canvas-confetti';
 import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X, ShieldCheck, Sparkles } from 'lucide-react';
+import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X, ShieldCheck } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { checkDeliveryEligibility, getDeliveryEligibility } from '../utils/deliveryRadius';
 import { getCurrentUser } from '../services/customerAuth';
-import { createPaymentIntent } from '../services/api';
+import { createPaymentIntent, getPublicConfig } from '../services/api';
 
-const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+const isValidStripePublishableKey = (value) => /^pk_(test|live)_[A-Za-z0-9]+$/.test(value || '');
 
 export default function CheckoutModal(props) {
+  const [stripeRuntime, setStripeRuntime] = useState({ status: 'idle', stripePromise: null });
+
+  useEffect(() => {
+    if (!props.isOpen) return undefined;
+
+    let isActive = true;
+    setStripeRuntime({ status: 'loading', stripePromise: null });
+    getPublicConfig()
+      .then(async (config) => {
+        const publishableKey = config?.stripePublishableKey?.trim();
+        if (!isValidStripePublishableKey(publishableKey)) {
+          throw new Error('Stripe publishable key is missing or invalid.');
+        }
+
+        const stripePromise = loadStripe(publishableKey).catch(() => null);
+        if (isActive) setStripeRuntime({ status: 'initializing', stripePromise, publishableKey });
+        const stripe = await stripePromise;
+        if (!stripe) throw new Error('Stripe could not be initialized.');
+        if (isActive) setStripeRuntime({ status: 'ready', stripePromise, publishableKey });
+      })
+      .catch((error) => {
+        if (isActive) {
+          setStripeRuntime((current) => ({
+            status: 'unavailable',
+            stripePromise: current.stripePromise,
+            publishableKey: current.publishableKey,
+            error: error.message
+          }));
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [props.isOpen]);
+
   if (!props.isOpen) return null;
 
+  if (stripeRuntime.status === 'idle' || stripeRuntime.status === 'loading') {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-card" style={{ maxWidth: '420px' }} role="dialog" aria-modal="true" aria-label="Loading secure checkout">
+          <div className="modal-header">
+            <h3>Preparing secure checkout</h3>
+            <button type="button" className="close-btn" onClick={props.onClose} aria-label="Close checkout"><X size={18} /></button>
+          </div>
+          <div className="modal-body" style={{ padding: '28px', textAlign: 'center', color: 'var(--text2)' }}>
+            Loading payment options…
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Elements stripe={stripePromise}>
-      <CheckoutForm {...props} stripeConfigured={Boolean(stripePublishableKey)} />
+    <Elements key={stripeRuntime.publishableKey || 'cash-only'} stripe={stripeRuntime.stripePromise}>
+      <CheckoutForm
+        {...props}
+        stripeConfigured={stripeRuntime.status === 'ready'}
+        stripeUnavailableReason={stripeRuntime.status === 'initializing' ? 'The secure card form is still loading.' : stripeRuntime.error}
+      />
     </Elements>
   );
 }
 
-function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrderMode = 'delivery', setOrderMode: setParentOrderMode, appliedVoucher, onOrderSuccess, stripeConfigured }) {
+function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrderMode = 'delivery', setOrderMode: setParentOrderMode, appliedVoucher, onOrderSuccess, stripeConfigured, stripeUnavailableReason }) {
   const stripe = useStripe();
   const elements = useElements();
   const [currentMode, setCurrentMode] = useState(initialOrderMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [radiusCheck, setRadiusCheck] = useState(() => checkDeliveryEligibility(''));
+  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
+  const checkoutIdRef = useRef(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -37,33 +94,19 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
     address: '',
     postcode: '',
     notes: '',
-    paymentMethod: 'card'
+    paymentMethod: 'cash'
   });
 
   useEffect(() => {
     let isActive = true;
 
     if (isOpen) {
-      const localProfile = localStorage.getItem('rfc_customer_profile');
-      if (localProfile) {
-        try {
-          const parsed = JSON.parse(localProfile);
-          if (parsed && parsed.name) {
-            setFormData(prev => ({
-              ...prev,
-              name: prev.name || parsed.name || '',
-              email: prev.email || parsed.email || '',
-              phone: prev.phone || parsed.phone || '',
-              address: prev.address || parsed.address || '',
-              postcode: prev.postcode || parsed.postcode || ''
-            }));
-          }
-        } catch (e) {}
-      }
-
+      setIsCustomerAuthenticated(false);
       getCurrentUser()
         .then((user) => {
-          if (!isActive || !user) return;
+          if (!isActive) return;
+          setIsCustomerAuthenticated(Boolean(user));
+          if (!user) return;
           setFormData((prev) => ({
             ...prev,
             name: prev.name || user.name || '',
@@ -73,7 +116,9 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
             postcode: prev.postcode || user.postcode || ''
           }));
         })
-        .catch(() => {});
+        .catch(() => {
+          if (isActive) setIsCustomerAuthenticated(false);
+        });
     }
 
     return () => {
@@ -143,7 +188,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
     if (setParentOrderMode) setParentOrderMode(newMode);
   };
 
-  const buildOrderPayload = (stripePaymentIntentId = null) => {
+  const buildOrderPayload = (stripePaymentIntentId = null, checkoutId = checkoutIdRef.current) => {
     const now = new Date();
     const formattedTimestamp = `${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}, ${now.toLocaleTimeString('en-GB')}`;
 
@@ -164,40 +209,40 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
       paymentMethod: formData.paymentMethod,
       paymentStatus: formData.paymentMethod === 'cash' ? 'PayOnCollectionOrDelivery' : 'Paid',
       stripePaymentIntentId,
+      checkoutId,
       orderTime: formattedTimestamp,
       createdAt: now.toISOString(),
       distanceKm: radiusCheck.distanceKm
     };
   };
 
-  const confirmStripePayment = async () => {
-    if (!stripeConfigured || !stripe || !elements) {
-      return `demo_pi_${Date.now()}`;
-    }
+  const confirmStripePayment = async (checkoutId) => {
+    if (!stripeConfigured) throw new Error('Card payments are currently unavailable. Please choose cash or try again later.');
+    if (!stripe || !elements) throw new Error('The secure card form is still loading. Please wait a moment and try again.');
 
     const card = elements.getElement(CardElement);
-    if (!card) return `demo_pi_${Date.now()}`;
+    if (!card) throw new Error('The secure card form could not be loaded. Please refresh and try again.');
 
-    try {
-      const intent = await createPaymentIntent({ order: buildOrderPayload(null) });
-      const result = await stripe.confirmCardPayment(intent.clientSecret, {
-        payment_method: {
-          card,
-          billing_details: {
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            address: currentMode === 'delivery' ? { line1: formData.address, postal_code: formData.postcode, country: 'GB' } : undefined
-          }
+    const intent = await createPaymentIntent({ checkoutId, order: buildOrderPayload(null, checkoutId) });
+    if (!intent?.clientSecret) throw new Error('The payment service did not create a valid payment session.');
+
+    const result = await stripe.confirmCardPayment(intent.clientSecret, {
+      payment_method: {
+        card,
+        billing_details: {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: currentMode === 'delivery' ? { line1: formData.address, postal_code: formData.postcode, country: 'GB' } : undefined
         }
-      });
+      }
+    });
 
-      if (result.error) throw new Error(result.error.message || 'Card payment failed.');
-      if (result.paymentIntent?.status !== 'succeeded') throw new Error('Card payment was not confirmed.');
-      return result.paymentIntent.id;
-    } catch (err) {
-      return `demo_pi_${Date.now()}`;
+    if (result.error) throw new Error(result.error.message || 'Card payment failed.');
+    if (result.paymentIntent?.status !== 'succeeded' || !result.paymentIntent.id) {
+      throw new Error('Card payment was not confirmed. No order has been placed.');
     }
+    return result.paymentIntent.id;
   };
 
   const handleSubmit = async (event) => {
@@ -208,11 +253,18 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
     setSubmitError('');
 
     try {
+      if (!checkoutIdRef.current) {
+        if (!globalThis.crypto?.randomUUID) {
+          throw new Error('Secure checkout is unavailable in this browser. Please use a current browser and try again.');
+        }
+        checkoutIdRef.current = globalThis.crypto.randomUUID();
+      }
+      const checkoutId = checkoutIdRef.current;
       const stripePaymentIntentId = formData.paymentMethod === 'card'
-        ? await confirmStripePayment()
+        ? await confirmStripePayment(checkoutId)
         : null;
 
-      await onOrderSuccess(buildOrderPayload(stripePaymentIntentId));
+      await onOrderSuccess(buildOrderPayload(stripePaymentIntentId, checkoutId));
       confetti({ particleCount: 180, spread: 80, origin: { y: 0.6 }, colors: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6'] });
     } catch (error) {
       setSubmitError(error.message || 'Order could not be completed. Please try again.');
@@ -433,17 +485,19 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                     ].map((method) => {
                       const Icon = method.icon;
                       const isSelected = formData.paymentMethod === method.id;
+                      const isDisabled = method.id === 'card' && (!stripeConfigured || !isCustomerAuthenticated);
                       return (
                         <motion.label 
                           key={method.id} 
                           whileHover={{ scale: 1.01 }}
                           whileTap={{ scale: 0.97 }}
                           style={{ 
-                            padding: '8px 10px', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.78rem',
+                            padding: '8px 10px', borderRadius: 'var(--radius-sm)', cursor: isDisabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.78rem',
                             border: `2px solid ${isSelected ? 'var(--red)' : 'var(--border)'}`, 
                             background: isSelected ? '#FEF2F2' : '#FFF',
                             color: isSelected ? 'var(--red)' : 'var(--text)',
-                            transition: 'all 0.15s ease'
+                            transition: 'all 0.15s ease',
+                            opacity: isDisabled ? 0.55 : 1
                           }}
                         >
                           <input
@@ -452,6 +506,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                             value={method.id}
                             checked={isSelected}
                             onChange={handleChange}
+                            disabled={isDisabled}
                             style={{ display: 'none' }}
                           />
                           <Icon size={14} />
@@ -461,16 +516,21 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode: initialOrder
                     })}
                   </div>
 
-                  {formData.paymentMethod === 'card' && (
+                  {formData.paymentMethod === 'card' && stripeConfigured && (
                     <div style={{ padding: '8px 10px', background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }}>
-                      {!stripeConfigured && (
-                        <div style={{ marginBottom: '4px', fontSize: '0.72rem', color: 'var(--amber)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <AlertTriangle size={12} /> Stripe publishable key missing. Demo card active.
-                        </div>
-                      )}
                       <div style={{ padding: '2px 0' }}>
                         <CardElement options={stripeStyle} />
                       </div>
+                    </div>
+                  )}
+                  {!stripeConfigured && (
+                    <div style={{ padding: '7px 10px', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 'var(--radius-sm)', fontSize: '0.72rem', color: '#92400E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertTriangle size={12} /> {stripeUnavailableReason || 'Card payments are unavailable.'} Cash checkout remains available.
+                    </div>
+                  )}
+                  {stripeConfigured && !isCustomerAuthenticated && (
+                    <div style={{ padding: '7px 10px', background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 'var(--radius-sm)', fontSize: '0.72rem', color: '#92400E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertTriangle size={12} /> Card payments require a signed-in customer account. Please use cash or sign in from the customer portal first.
                     </div>
                   )}
                 </div>

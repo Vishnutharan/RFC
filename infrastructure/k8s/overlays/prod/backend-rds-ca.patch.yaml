@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rfc-backend
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          volumeMounts:
+            - name: rds-ca
+              mountPath: /etc/ssl/certs/rds-ca-rsa2048-g1.pem
+              subPath: rds-ca-rsa2048-g1.pem
+              readOnly: true
+      volumes:
+        - name: rds-ca
+          configMap:
+            name: rfc-rds-ca
+            defaultMode: 0444

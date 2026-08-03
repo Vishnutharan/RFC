@@ -17,7 +17,7 @@ public static class DatabaseInitializer
     }
     """;
 
-    public static async Task InitializeAsync(WebApplication app)
+    public static async Task InitializeAsync(WebApplication app, bool forceMigrations = false)
     {
         using var scope = app.Services.CreateScope();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseInitializer");
@@ -25,20 +25,40 @@ public static class DatabaseInitializer
 
         if (db == null)
         {
-            logger.LogError("ConnectionStrings:RfcDatabase is not configured. Database-backed API endpoints will return 503.");
+            var message = "ConnectionStrings:RfcDatabase is not configured.";
+            logger.LogCritical(message);
+            if (!app.Environment.IsDevelopment()) throw new InvalidOperationException(message);
             return;
         }
 
         try
         {
+            var shouldMigrate = forceMigrations ||
+                                app.Environment.IsDevelopment() ||
+                                app.Configuration.GetValue<bool>("Database:RunMigrationsOnStartup");
+            if (!shouldMigrate)
+            {
+                if (!await db.Database.CanConnectAsync())
+                    throw new InvalidOperationException("The production database is not reachable.");
+
+                var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+                if (pendingMigrations.Any())
+                    throw new InvalidOperationException(
+                        "The database schema is behind the application. Run the release migration job before starting the API.");
+                await EnsureActiveManagerAsync(db);
+                return;
+            }
+
             await db.Database.MigrateAsync();
             await SeedMenuAsync(db, logger);
             await SeedOpeningHoursAsync(db);
             await SeedStaffUserAsync(db, app.Configuration, logger);
+            await EnsureActiveManagerAsync(db);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Database initialization failed. Check the configured database connection and migrations.");
+            if (!app.Environment.IsDevelopment()) throw;
         }
     }
 
@@ -107,5 +127,16 @@ public static class DatabaseInitializer
         });
         await db.SaveChangesAsync();
         logger.LogInformation("Seeded first staff user {Email}.", email);
+    }
+
+    private static async Task EnsureActiveManagerAsync(RfcDbContext db)
+    {
+        if (await db.StaffUsers.AsNoTracking().AnyAsync(user => user.IsActive && user.Role == "manager"))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "No active manager account exists. Provision one through the approved bootstrap process before serving traffic.");
     }
 }

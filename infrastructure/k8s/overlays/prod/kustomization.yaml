@@ -6,15 +6,25 @@ namespace: rfc-prod
 resources:
   - ../../base
 
+configMapGenerator:
+  - name: rfc-rds-ca
+    files:
+      - certificates/rds-ca-rsa2048-g1.pem
+
+generatorOptions:
+  # The out-of-band migration Job mounts this well-known ConfigMap name.
+  disableNameSuffixHash: true
+
 images:
   - name: rfc-backend
     newName: ghcr.io/rfc-watford/rfc-backend
-    newTag: prod
+    digest: sha256:REPLACE_WITH_APPROVED_BACKEND_64_CHARACTER_DIGEST
   - name: rfc-frontend
     newName: ghcr.io/rfc-watford/rfc-frontend
-    newTag: prod
+    digest: sha256:REPLACE_WITH_APPROVED_FRONTEND_64_CHARACTER_DIGEST
 
 patches:
+  - path: backend-rds-ca.patch.yaml
   - path: configmap-backend.patch.yaml
   - path: external-secret-backend.patch.yaml
   - path: ingress.patch.yaml

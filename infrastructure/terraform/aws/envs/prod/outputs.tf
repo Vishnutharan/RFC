@@ -23,9 +23,9 @@ output "app_secret_name" {
   description = "AWS Secrets Manager secret read by External Secrets Operator for backend runtime config."
 }
 
-output "frontend_secret_name" {
-  value       = aws_secretsmanager_secret.frontend.name
-  description = "AWS Secrets Manager secret read by External Secrets Operator for frontend runtime config."
+output "external_secrets_role_arn" {
+  value       = aws_iam_role.external_secrets.arn
+  description = "IRSA role ARN for the external-secrets service account."
 }
 
 output "postgres_endpoint" {

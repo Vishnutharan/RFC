@@ -22,7 +22,7 @@ public sealed class AuditService
         try
         {
             var httpContext = _httpContextAccessor.HttpContext;
-            _db.AuditLogs.Add(new AuditLog
+            var auditLog = new AuditLog
             {
                 Id = Guid.NewGuid().ToString("N"),
                 UserId = httpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -33,11 +33,16 @@ public sealed class AuditService
                 NewValue = newValue == null ? null : JsonSerializer.Serialize(newValue),
                 Timestamp = DateTime.UtcNow,
                 IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString()
-            });
-            await _db.SaveChangesAsync();
+            };
+            _db.AuditLogs.Add(auditLog);
+            await _db.SaveChangesAsync(httpContext?.RequestAborted ?? CancellationToken.None);
         }
         catch (Exception ex)
         {
+            foreach (var entry in _db.ChangeTracker.Entries<AuditLog>().Where(entry => entry.State == Microsoft.EntityFrameworkCore.EntityState.Added))
+            {
+                entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+            }
             _logger.LogWarning(ex, "Audit log failed for {Action} on {EntityType}/{EntityId}", action, entityType, entityId);
         }
     }

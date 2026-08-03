@@ -1,28 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { 
-  ShoppingBag, TrendingUp, DollarSign, Clock, RefreshCw, Download, 
-  CheckCircle, Truck, AlertTriangle, ChevronRight, Search, Printer, 
-  Calendar, Star, MessageSquare, Flame, Plus, Edit2, Trash2, Package, 
-  Settings, Users, Shield, UserCheck, ToggleLeft, ToggleRight, X, Eye, Save,
-  Ban, CornerUpLeft
+  RefreshCw, Download, Search, Printer, Plus, Edit2, Trash2,
+  Settings, X, Save
 } from 'lucide-react';
 import { 
-  getAdminOrders, updateOrderStatus, getMenuItems, createAdminMenuItem, 
+  getAdminOrders, updateOrderStatus, getAdminMenu, createAdminMenuItem,
   updateAdminMenuItem, archiveAdminMenuItem, getAdminCustomers, 
   getAdminStaff, createAdminStaff, updateAdminSetting, getAdminSettings 
 } from '../services/api';
-import { CATEGORIES, MENU_ITEMS } from '../data/initialMenu';
+import { CATEGORIES } from '../data/initialMenu';
 import PrintReceiptModal from './PrintReceiptModal';
 import ReviewsManager from './ReviewsManager';
-
-// const DEMO_ORDERS = [
-//   { id: '1001', orderNumber: '1001', customerName: 'Alice Smith', customerPhone: '+44 7700 900111', deliveryAddress: '10 Main St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Placed', total: 25.50, items: [{name: 'Boneless Banquet', quantity: 1, price: 8.99}, {name: 'Hot Wings', quantity: 2, price: 4.50}], createdAt: '2026-08-03T12:30:00Z' },
-//   { id: '1002', orderNumber: '1002', customerName: 'Bob Jones', customerPhone: '+44 7700 900222', deliveryAddress: '15 High St, Watford', orderType: 'collection', paymentMethod: 'CASH', orderStatus: 'Preparing', total: 18.00, items: [{name: 'Family Bucket', quantity: 1, price: 18.00}], createdAt: '2026-08-03T12:45:00Z' },
-//   { id: '1003', orderNumber: '1003', customerName: 'Charlie Brown', customerPhone: '+44 7700 900333', deliveryAddress: '20 Market St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 45.20, items: [{name: 'Party Platter', quantity: 2, price: 20.00}], createdAt: '2026-08-03T11:15:00Z' },
-//   { id: '1004', orderNumber: '1004', customerName: 'David Lee', customerPhone: '+44 7700 900444', deliveryAddress: '5 Park Ave, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Refunded', refundAmount: 15.00, refundReason: 'Late delivery', total: 15.00, items: [{name: 'Zinger Burger Meal', quantity: 2, price: 7.50}], createdAt: '2026-08-02T18:30:00Z' },
-//   { id: '1005', orderNumber: '1005', customerName: 'Eva Green', customerPhone: '+44 7700 900555', deliveryAddress: '8 Elm Rd, Watford', orderType: 'collection', paymentMethod: 'CARD', orderStatus: 'Cancelled', cancellationReason: 'Customer request', total: 22.00, items: [{name: 'Veggie Wrap', quantity: 2, price: 11.00}], createdAt: '2026-08-02T19:00:00Z' },
-//   { id: '1006', orderNumber: '1006', customerName: 'Frank White', customerPhone: '+44 7700 900666', deliveryAddress: '12 Oak St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 30.00, items: [{name: 'Chicken Tenders', quantity: 3, price: 10.00}], createdAt: '2026-07-25T14:00:00Z' }
-// ];
 
 export default function AdminDashboard({ showToast }) {
   const [orders, setOrders] = useState([]);
@@ -31,84 +19,74 @@ export default function AdminDashboard({ showToast }) {
   const [printModalOrder, setPrintModalOrder] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modals for Refund & Cancel
-  const [refundModalState, setRefundModalState] = useState({ isOpen: false, order: null, amount: '', reason: '' });
-  const [cancelModalState, setCancelModalState] = useState({ isOpen: false, order: null, reason: '' });
-
   // Sales Reports State
   const [reportType, setReportType] = useState('daily'); // 'daily', 'monthly'
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
   // Orders Ledger State
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [ledgerFilter, setLedgerFilter] = useState('All');
 
   // Product & Menu Management state
-  const [products, setProducts] = useState(MENU_ITEMS);
+  const [products, setProducts] = useState([]);
   const [productSearch, setProductSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [editingProduct, setEditingProduct] = useState(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
 
   // Staff Management state
-  const [staffList, setStaffList] = useState([
-    { id: 1, name: 'Vishnutharan', email: 'admin@rfcwatford.com', role: 'Store Owner', status: 'Active', joined: '2023-01-15' },
-    { id: 2, name: 'Chef Tharan', email: 'kitchen@rfcwatford.com', role: 'Head Chef', status: 'Active', joined: '2023-03-10' },
-    { id: 3, name: 'Front Desk Team', email: 'staff@rfcwatford.com', role: 'Counter Staff', status: 'Active', joined: '2023-06-01' }
-  ]);
+  const [staffList, setStaffList] = useState([]);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
-  const [newStaff, setNewStaff] = useState({ name: '', email: '', role: 'Counter Staff', password: '' });
+  const [newStaff, setNewStaff] = useState({ name: '', email: '', role: 'staff', password: '' });
 
   // Customer Management state
-  const [customersList, setCustomersList] = useState([
-    { id: 'c1', name: 'John Doe', email: 'john@example.com', phone: '+44 7700 900077', totalOrders: 14, loyaltyPoints: 340, address: '12 St Albans Rd, Watford' },
-    { id: 'c2', name: 'Sarah Smith', email: 'sarah@example.com', phone: '+44 7700 900088', totalOrders: 8, loyaltyPoints: 190, address: '45 High St, Watford' },
-    { id: 'c3', name: 'Alex Johnson', email: 'alex@example.com', phone: '+44 7700 900099', totalOrders: 21, loyaltyPoints: 520, address: '88 Cassiobury Dr, Watford' }
-  ]);
+  const [customersList, setCustomersList] = useState([]);
 
   // Store Settings state
-  const [storeSettings, setStoreSettings] = useState({
-    storeOpen: true,
-    minSpend: 15.00,
-    deliveryFee: 2.50,
-    freeDeliveryThreshold: 25.00,
-    phone: '+44 1923 961864',
-    address: '119 Courtlands Drive, Watford WD17 4HZ',
-    openingHours: 'Mon-Sun: 11:00 AM - 10:00 PM'
-  });
+  const [storeSettings, setStoreSettings] = useState({ openingHours: '' });
 
   // Fetch Orders & Menu Items
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [orderData, menuData] = await Promise.allSettled([
-        getAdminOrders(),
-        getMenuItems()
-      ]);
+  const fetchData = useCallback(async ({ showSpinner = true, notifyOnError = true } = {}) => {
+    if (showSpinner) setLoading(true);
+    const results = await Promise.allSettled([
+      getAdminOrders(),
+      getAdminMenu(),
+      getAdminCustomers(),
+      getAdminStaff(),
+      getAdminSettings()
+    ]);
+    const [orderData, menuData, customerData, staffData, settingsData] = results;
 
-      if (orderData.status === 'fulfilled' && Array.isArray(orderData.value)) {
-        setOrders(orderData.value);
-      } else {
-        if (orders.length === 0) setOrders([]);
-      }
-
-      if (menuData.status === 'fulfilled' && Array.isArray(menuData.value) && menuData.value.length > 0) {
-        setProducts(menuData.value);
-      }
-    } catch (e) {
-      if (orders.length === 0) setOrders([]);
-      console.warn('Backend load failed, using local fallback state');
-    } finally {
-      setLoading(false);
+    if (orderData.status === 'fulfilled' && Array.isArray(orderData.value)) setOrders(orderData.value);
+    if (menuData.status === 'fulfilled' && Array.isArray(menuData.value)) {
+      setProducts(menuData.value.filter((item) => item.isAvailable !== false));
     }
-  };
+    if (customerData.status === 'fulfilled' && Array.isArray(customerData.value)) setCustomersList(customerData.value);
+    if (staffData.status === 'fulfilled' && Array.isArray(staffData.value)) setStaffList(staffData.value);
+    if (settingsData.status === 'fulfilled' && Array.isArray(settingsData.value)) {
+      const openingHours = settingsData.value.find((setting) => setting.key === 'OpeningHours');
+      if (openingHours?.value) {
+        try {
+          setStoreSettings({ openingHours: JSON.stringify(JSON.parse(openingHours.value), null, 2) });
+        } catch {
+          setStoreSettings({ openingHours: openingHours.value });
+        }
+      }
+    }
+
+    const failureCount = results.filter((result) => result.status === 'rejected').length;
+    if (failureCount > 0 && notifyOnError) {
+      showToast?.(`Could not load ${failureCount} admin data source${failureCount === 1 ? '' : 's'}. Existing server-confirmed data was kept.`, 'error');
+    }
+    if (showSpinner) setLoading(false);
+  }, [showToast]);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 12000);
+    const interval = setInterval(() => fetchData({ showSpinner: false, notifyOnError: false }), 12000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
   // Order Status Change
   const handleStatusChange = async (orderId, newStatus) => {
@@ -117,33 +95,11 @@ export default function AdminDashboard({ showToast }) {
       setOrders(prev => prev.map(o => (o.id === orderId || o.orderNumber === orderId) ? { ...o, orderStatus: newStatus } : o));
       showToast?.(`Order #${orderId} moved to ${newStatus}`);
     } catch (e) {
-      setOrders(prev => prev.map(o => (o.id === orderId || o.orderNumber === orderId) ? { ...o, orderStatus: newStatus } : o));
-      showToast?.(`Updated Order status to ${newStatus}`);
+      showToast?.(e.message || `Order #${orderId} could not be moved to ${newStatus}.`, 'error');
     }
   };
 
-  const handleRefundSubmit = (e) => {
-    e.preventDefault();
-    const { order, amount, reason } = refundModalState;
-    if (!order || !amount || !reason) return;
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'Refunded', refundAmount: parseFloat(amount), refundReason: reason } : o));
-    showToast?.(`Refund of £${amount} issued for Order #${order.orderNumber}`);
-    setRefundModalState({ isOpen: false, order: null, amount: '', reason: '' });
-  };
-
-  const handleCancelSubmit = (e) => {
-    e.preventDefault();
-    const { order, reason } = cancelModalState;
-    if (!order || !reason) return;
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'Cancelled', cancellationReason: reason } : o));
-    showToast?.(`Order #${order.orderNumber} Cancelled`);
-    setCancelModalState({ isOpen: false, order: null, reason: '' });
-  };
-
   // KPIs (Global)
-  const nonCancelledOrders = orders.filter(o => o.orderStatus !== 'Cancelled' && o.orderStatus !== 'Refunded');
-  const globalTotalRevenue = nonCancelledOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-  const globalTotalOrdersCount = orders.length;
   const activeKitchenCount = useMemo(() => orders.filter(o => o.orderStatus === 'Placed' || o.orderStatus === 'Preparing').length, [orders]);
 
   // Kanban Columns
@@ -222,7 +178,7 @@ export default function AdminDashboard({ showToast }) {
         (o.customerPhone && o.customerPhone.includes(q))
       );
     }
-    return res.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return [...res].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [orders, ledgerSearch, ledgerFilter]);
 
 
@@ -236,25 +192,30 @@ export default function AdminDashboard({ showToast }) {
   }, [products, selectedCategory, productSearch]);
 
   const handleToggleStock = async (product) => {
-    const newStock = Number(product.stockQuantity || 99) === 0 ? 99 : 0;
-    const updated = { ...product, stockQuantity: newStock };
-    setProducts(prev => prev.map(p => p.id === product.id ? updated : p));
+    if (Number(product.stockCount ?? 0) <= 0) {
+      setEditingProduct(product);
+      setIsProductModalOpen(true);
+      return;
+    }
+    const newStock = 0;
+    const updated = { ...product, stockCount: newStock, isAvailable: product.isAvailable ?? true };
     try {
-      await updateAdminMenuItem(product.id, updated);
+      const saved = await updateAdminMenuItem(product.id, updated);
+      setProducts(prev => prev.map(p => p.id === product.id ? saved : p));
       showToast?.(`${product.name} stock set to ${newStock === 0 ? 'Out of Stock' : 'In Stock'}`);
-    } catch {
-      showToast?.(`${product.name} stock updated locally`);
+    } catch (error) {
+      showToast?.(error.message || `${product.name} stock could not be updated.`, 'error');
     }
   };
 
   const handleArchiveProduct = async (productId, productName) => {
     if (!window.confirm(`Are you sure you want to remove "${productName}" from the store menu?`)) return;
-    setProducts(prev => prev.filter(p => p.id !== productId));
     try {
       await archiveAdminMenuItem(productId);
+      setProducts(prev => prev.filter(p => p.id !== productId));
       showToast?.(`Removed ${productName} from store menu`);
-    } catch {
-      showToast?.(`Removed ${productName} locally`);
+    } catch (error) {
+      showToast?.(error.message || `${productName} could not be archived.`, 'error');
     }
   };
 
@@ -264,59 +225,64 @@ export default function AdminDashboard({ showToast }) {
     const formData = new FormData(form);
 
     const productPayload = {
-      id: editingProduct?.id || `p-${Date.now()}`,
+      ...(editingProduct?.id ? { id: editingProduct.id } : {}),
       name: formData.get('name'),
       categoryId: formData.get('categoryId'),
       price: parseFloat(formData.get('price')),
       calorieInfo: formData.get('calorieInfo') || '850 kcal',
       description: formData.get('description'),
       imageUrl: formData.get('imageUrl') || 'https://images.unsplash.com/photo-1562967914-608f82629710?w=600&auto=format&fit=crop&q=80',
-      stockQuantity: parseInt(formData.get('stockQuantity') || '99', 10),
+      stockCount: parseInt(formData.get('stockCount') || '999', 10),
       isBestseller: formData.get('isBestseller') === 'on',
       isSpicy: formData.get('isSpicy') === 'on',
-      isVegetarian: formData.get('isVegetarian') === 'on',
-      hasOptions: formData.get('hasOptions') === 'on'
+      hasOptions: formData.get('hasOptions') === 'on',
+      isAvailable: editingProduct?.isAvailable ?? true
     };
 
-    if (editingProduct) {
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? productPayload : p));
-      try {
-        await updateAdminMenuItem(editingProduct.id, productPayload);
+    try {
+      if (editingProduct) {
+        const saved = await updateAdminMenuItem(editingProduct.id, productPayload);
+        setProducts(prev => prev.map(p => p.id === editingProduct.id ? saved : p));
         showToast?.(`Updated ${productPayload.name}`);
-      } catch {
-        showToast?.(`Updated ${productPayload.name} locally`);
-      }
-    } else {
-      setProducts(prev => [productPayload, ...prev]);
-      try {
-        await createAdminMenuItem(productPayload);
+      } else {
+        const saved = await createAdminMenuItem(productPayload);
+        setProducts(prev => [saved, ...prev]);
         showToast?.(`Added new product ${productPayload.name}`);
-      } catch {
-        showToast?.(`Added ${productPayload.name} to menu`);
       }
+      setIsProductModalOpen(false);
+      setEditingProduct(null);
+    } catch (error) {
+      showToast?.(error.message || `${productPayload.name} could not be saved.`, 'error');
     }
-    setIsProductModalOpen(false);
-    setEditingProduct(null);
   };
 
-  const handleAddStaff = (e) => {
+  const handleAddStaff = async (e) => {
     e.preventDefault();
     if (!newStaff.name || !newStaff.email) return;
-    const staffEntry = {
-      id: Date.now(),
-      ...newStaff,
-      status: 'Active',
-      joined: new Date().toISOString().split('T')[0]
-    };
-    setStaffList(prev => [...prev, staffEntry]);
-    setIsStaffModalOpen(false);
-    setNewStaff({ name: '', email: '', role: 'Counter Staff', password: '' });
-    showToast?.(`Added staff member ${staffEntry.name}`);
+    try {
+      const staffEntry = await createAdminStaff({ ...newStaff, isActive: true });
+      setStaffList(prev => [staffEntry, ...prev]);
+      setIsStaffModalOpen(false);
+      setNewStaff({ name: '', email: '', role: 'staff', password: '' });
+      showToast?.(`Added staff member ${staffEntry.name}`);
+    } catch (error) {
+      showToast?.(error.message || 'The staff account could not be created.', 'error');
+    }
   };
 
-  const handleSaveSettings = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault();
-    showToast?.('Store operational settings saved successfully!');
+    try {
+      const parsed = JSON.parse(storeSettings.openingHours);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Opening hours must be a JSON object.');
+      }
+      const saved = await updateAdminSetting('OpeningHours', JSON.stringify(parsed));
+      setStoreSettings({ openingHours: JSON.stringify(JSON.parse(saved.value), null, 2) });
+      showToast?.('Opening hours saved.');
+    } catch (error) {
+      showToast?.(error.message || 'Opening hours could not be saved.', 'error');
+    }
   };
 
   const exportMonthlyCSV = () => {
@@ -348,11 +314,11 @@ export default function AdminDashboard({ showToast }) {
             <h2>RFC Store Control & POS Dashboard</h2>
             <span className="card-badge badge-spicy" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FFF', animation: 'pulse 1.2s infinite' }} /> 
-              {storeSettings.storeOpen ? 'STORE ONLINE' : 'STORE CLOSED'}
+              SERVER-CONFIRMED DATA
             </span>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '2px' }}>
-            Store: RFC Watford • 119 Courtlands Drive, WD17 4HZ • Tel: {storeSettings.phone}
+            Store: RFC Watford • 119 Courtlands Drive, WD17 4HZ
           </p>
         </div>
 
@@ -367,7 +333,7 @@ export default function AdminDashboard({ showToast }) {
             />
           </div>
 
-          <button onClick={fetchData} className="mode-btn" style={{ background: '#FFF', border: '1px solid var(--border)' }}>
+          <button onClick={() => fetchData()} className="mode-btn" style={{ background: '#FFF', border: '1px solid var(--border)' }}>
             <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
           </button>
         </div>
@@ -379,7 +345,7 @@ export default function AdminDashboard({ showToast }) {
           { id: 'kanban', label: '📋 Live Kitchen Kanban', count: activeKitchenCount },
           { id: 'menu_editor', label: '🍔 Menu & Product Management', count: products.length },
           { id: 'sales_reports', label: '📊 Sales Reports (Daily & Monthly)', count: '' },
-          { id: 'orders_ledger', label: '📑 All Orders & Refunds Ledger', count: '' },
+          { id: 'orders_ledger', label: '📑 All Orders Ledger', count: '' },
           { id: 'store_settings', label: '⚙️ Store Operational Settings', count: '' },
           { id: 'staff_manager', label: '👥 Staff Management', count: staffList.length },
           { id: 'customer_manager', label: '👤 Customer Directory', count: customersList.length },
@@ -515,7 +481,7 @@ export default function AdminDashboard({ showToast }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
             {filteredProducts.map((p) => {
-              const isOutOfStock = Number(p.stockQuantity || 99) === 0;
+              const isOutOfStock = Number(p.stockCount ?? 999) === 0;
               return (
                 <div key={p.id} className="food-card" style={{ opacity: isOutOfStock ? 0.75 : 1 }}>
                   <div className="card-img-wrapper" style={{ height: '140px' }}>
@@ -552,8 +518,9 @@ export default function AdminDashboard({ showToast }) {
                         onClick={() => handleToggleStock(p)}
                         className="mode-btn"
                         style={{ background: isOutOfStock ? '#ECFDF5' : '#FEF2F2', color: isOutOfStock ? '#047857' : '#B91C1C', padding: '6px 12px', fontSize: '0.78rem' }}
+                        title={isOutOfStock ? 'Open the editor to enter an exact stock quantity' : 'Set stock to zero'}
                       >
-                        {isOutOfStock ? 'In Stock' : 'Out Stock'}
+                        {isOutOfStock ? 'Restock…' : 'Out of Stock'}
                       </button>
 
                       <button 
@@ -699,8 +666,8 @@ export default function AdminDashboard({ showToast }) {
         <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <h3>All Orders & Refunds Ledger</h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Manage every order, issue refunds, and process cancellations.</p>
+              <h3>All Orders Ledger</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Review orders and use server-backed status controls. Refunds require a dedicated server endpoint and are not initiated here.</p>
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -768,16 +735,6 @@ export default function AdminDashboard({ showToast }) {
                         <button onClick={() => setPrintModalOrder(o)} className="mode-btn" style={{ background: '#F1F5F9', padding: '6px', borderRadius: 'var(--radius-xs)' }} title="Print Docket">
                           <Printer size={16} />
                         </button>
-                        {o.orderStatus !== 'Refunded' && o.orderStatus !== 'Cancelled' && (
-                          <>
-                            <button onClick={() => setRefundModalState({ isOpen: true, order: o, amount: '', reason: '' })} className="mode-btn" style={{ background: '#FEF3C7', color: '#B45309', padding: '6px', borderRadius: 'var(--radius-xs)' }} title="Issue Refund">
-                              <CornerUpLeft size={16} />
-                            </button>
-                            <button onClick={() => setCancelModalState({ isOpen: true, order: o, reason: '' })} className="mode-btn" style={{ background: '#FEF2F2', color: '#B91C1C', padding: '6px', borderRadius: 'var(--radius-xs)' }} title="Cancel Order">
-                              <Ban size={16} />
-                            </button>
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -794,52 +751,21 @@ export default function AdminDashboard({ showToast }) {
           <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: 8 }}><Settings size={20} /> Store Operational Controls</h3>
           
           <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: 'var(--radius-sm)', background: storeSettings.storeOpen ? '#ECFDF5' : '#FEF2F2', border: '1px solid var(--border)' }}>
-              <div>
-                <strong>Online Ordering Status</strong>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>Toggle store active status for online orders</p>
-              </div>
-              <button 
-                type="button"
-                onClick={() => setStoreSettings(prev => ({ ...prev, storeOpen: !prev.storeOpen }))}
-                className="btn-submit-modal"
-                style={{ width: 'auto', padding: '8px 16px', background: storeSettings.storeOpen ? '#10B981' : '#E52929' }}
-              >
-                {storeSettings.storeOpen ? 'STORE OPEN (ACTIVE)' : 'STORE CLOSED (OFFLINE)'}
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Delivery Fee (£)</label>
-                <input type="number" step="0.5" value={storeSettings.deliveryFee} onChange={(e) => setStoreSettings({ ...storeSettings, deliveryFee: parseFloat(e.target.value) })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Free Delivery Over (£)</label>
-                <input type="number" step="1" value={storeSettings.freeDeliveryThreshold} onChange={(e) => setStoreSettings({ ...storeSettings, freeDeliveryThreshold: parseFloat(e.target.value) })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Min Delivery Spend (£)</label>
-                <input type="number" step="1" value={storeSettings.minSpend} onChange={(e) => setStoreSettings({ ...storeSettings, minSpend: parseFloat(e.target.value) })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Store Phone</label>
-                <input type="text" value={storeSettings.phone} onChange={(e) => setStoreSettings({ ...storeSettings, phone: e.target.value })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
-              </div>
-            </div>
-
             <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Store Address</label>
-              <input type="text" value={storeSettings.address} onChange={(e) => setStoreSettings({ ...storeSettings, address: e.target.value })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Operating Hours</label>
-              <input type="text" value={storeSettings.openingHours} onChange={(e) => setStoreSettings({ ...storeSettings, openingHours: e.target.value })} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
+              <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Opening Hours JSON</label>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text2)', margin: '4px 0 8px' }}>This is the only operational setting currently consumed by the ordering backend. Changes are applied only after the server confirms them.</p>
+              <textarea
+                value={storeSettings.openingHours}
+                onChange={(e) => setStoreSettings({ openingHours: e.target.value })}
+                className="notes-input"
+                spellCheck="false"
+                required
+                style={{ width: '100%', minHeight: '300px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+              />
             </div>
 
             <button type="submit" className="btn-submit-modal" style={{ marginTop: '10px' }}>
-              <Save size={16} /> Save Operational Settings
+              <Save size={16} /> Save Opening Hours
             </button>
           </form>
         </div>
@@ -874,10 +800,10 @@ export default function AdminDashboard({ showToast }) {
                   <td style={{ padding: '12px', fontWeight: 800 }}>{s.name}</td>
                   <td style={{ padding: '12px' }}>{s.email}</td>
                   <td style={{ padding: '12px' }}>
-                    <span className="card-badge badge-bestseller" style={{ background: s.role.includes('Owner') ? 'var(--red)' : 'var(--indigo)' }}>{s.role}</span>
+                    <span className="card-badge badge-bestseller" style={{ background: s.role === 'manager' ? 'var(--red)' : 'var(--indigo)' }}>{s.role}</span>
                   </td>
-                  <td style={{ padding: '12px' }}><span className="status-badge status-completed">{s.status}</span></td>
-                  <td style={{ padding: '12px', color: 'var(--text3)' }}>{s.joined}</td>
+                  <td style={{ padding: '12px' }}><span className={`status-badge ${s.isActive ? 'status-completed' : 'status-cancelled'}`}>{s.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td style={{ padding: '12px', color: 'var(--text3)' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB') : '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -896,7 +822,7 @@ export default function AdminDashboard({ showToast }) {
                 <th style={{ padding: '12px' }}>Contact Info</th>
                 <th style={{ padding: '12px' }}>Saved Address</th>
                 <th style={{ padding: '12px' }}>Orders Placed</th>
-                <th style={{ padding: '12px' }}>Loyalty Points</th>
+                <th style={{ padding: '12px' }}>Lifetime Spend</th>
               </tr>
             </thead>
             <tbody>
@@ -905,8 +831,8 @@ export default function AdminDashboard({ showToast }) {
                   <td style={{ padding: '12px', fontWeight: 800 }}>{c.name}</td>
                   <td style={{ padding: '12px' }}>{c.email}<br/><span style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>{c.phone}</span></td>
                   <td style={{ padding: '12px' }}>{c.address}</td>
-                  <td style={{ padding: '12px', fontWeight: 700 }}>{c.totalOrders} orders</td>
-                  <td style={{ padding: '12px', fontWeight: 900, color: 'var(--amber)' }}>🎁 {c.loyaltyPoints} pts</td>
+                  <td style={{ padding: '12px', fontWeight: 700 }}>{c.orderCount || 0} orders</td>
+                  <td style={{ padding: '12px', fontWeight: 900, color: 'var(--amber)' }}>£{Number(c.lifetimeSpend || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -956,7 +882,7 @@ export default function AdminDashboard({ showToast }) {
                 </div>
                 <div>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Stock Quantity</label>
-                  <input name="stockQuantity" type="number" defaultValue={editingProduct?.stockQuantity ?? 99} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
+                  <input name="stockCount" type="number" min="0" max="9999" defaultValue={editingProduct?.stockCount ?? 999} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
                 </div>
               </div>
               <div>
@@ -966,7 +892,6 @@ export default function AdminDashboard({ showToast }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--surface-alt)', padding: '10px', borderRadius: 'var(--radius-sm)' }}>
                 <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="isBestseller" defaultChecked={editingProduct?.isBestseller} /> Bestseller Badge</label>
                 <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="isSpicy" defaultChecked={editingProduct?.isSpicy} /> Spicy Badge</label>
-                <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="isVegetarian" defaultChecked={editingProduct?.isVegetarian} /> Vegetarian</label>
                 <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" name="hasOptions" defaultChecked={editingProduct?.hasOptions ?? true} /> Side & Drink Choices</label>
               </div>
               <div className="modal-footer" style={{ padding: 0, marginTop: '10px' }}>
@@ -998,84 +923,15 @@ export default function AdminDashboard({ showToast }) {
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Role & Permissions</label>
                 <select value={newStaff.role} onChange={e => setNewStaff({ ...newStaff, role: e.target.value })} style={{ width: '100%', marginTop: '4px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  <option value="Counter Staff">Counter Staff (Orders only)</option>
-                  <option value="Kitchen Staff">Kitchen Staff (Kanban only)</option>
-                  <option value="Store Manager">Store Manager (Full access)</option>
+                  <option value="staff">Staff (orders and kitchen)</option>
+                  <option value="manager">Manager (full access)</option>
                 </select>
               </div>
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Initial Password</label>
-                <input type="password" value={newStaff.password} onChange={e => setNewStaff({ ...newStaff, password: e.target.value })} required minLength={6} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
+                <input type="password" autoComplete="new-password" value={newStaff.password} onChange={e => setNewStaff({ ...newStaff, password: e.target.value })} required minLength={8} className="input-group" style={{ width: '100%', marginTop: '4px' }} />
               </div>
               <button type="submit" className="btn-submit-modal" style={{ marginTop: '10px' }}>Create Account</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: REFUND ORDER */}
-      {refundModalState.isOpen && (
-        <div className="modal-overlay" onClick={() => setRefundModalState({ ...refundModalState, isOpen: false })}>
-          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ color: 'var(--amber)' }}>Issue Order Refund</h3>
-              <button className="close-btn" onClick={() => setRefundModalState({ ...refundModalState, isOpen: false })}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleRefundSubmit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
-                Refunding Order <strong>#{refundModalState.order?.orderNumber}</strong>.<br/>
-                Total Order Value: <strong>£{refundModalState.order?.total?.toFixed(2)}</strong>
-              </p>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Refund Amount (£)</label>
-                <input type="number" step="0.01" max={refundModalState.order?.total} value={refundModalState.amount} onChange={e => setRefundModalState({ ...refundModalState, amount: e.target.value })} required className="input-group" style={{ width: '100%', marginTop: '4px' }} placeholder="0.00" />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Reason for Refund</label>
-                <select value={refundModalState.reason} onChange={e => setRefundModalState({ ...refundModalState, reason: e.target.value })} required style={{ width: '100%', marginTop: '4px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  <option value="" disabled>Select a reason...</option>
-                  <option value="Customer cancellation">Customer cancellation</option>
-                  <option value="Missing item">Missing item</option>
-                  <option value="Late delivery">Late delivery</option>
-                  <option value="Quality complaint">Quality complaint</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div className="modal-footer" style={{ padding: 0, marginTop: '10px' }}>
-                <button type="button" className="btn-back" onClick={() => setRefundModalState({ ...refundModalState, isOpen: false })}>Cancel</button>
-                <button type="submit" className="btn-submit-modal" style={{ flex: 1, background: 'var(--amber)' }}>Process Refund</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: CANCEL ORDER */}
-      {cancelModalState.isOpen && (
-        <div className="modal-overlay" onClick={() => setCancelModalState({ ...cancelModalState, isOpen: false })}>
-          <div className="modal-card" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ color: 'var(--red)' }}>Cancel Order</h3>
-              <button className="close-btn" onClick={() => setCancelModalState({ ...cancelModalState, isOpen: false })}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCancelSubmit} className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
-                Are you sure you want to cancel Order <strong>#{cancelModalState.order?.orderNumber}</strong>?
-              </p>
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>Cancellation Reason</label>
-                <select value={cancelModalState.reason} onChange={e => setCancelModalState({ ...cancelModalState, reason: e.target.value })} required style={{ width: '100%', marginTop: '4px', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  <option value="" disabled>Select a reason...</option>
-                  <option value="Out of stock">Out of stock</option>
-                  <option value="Store closing">Store closing</option>
-                  <option value="Customer requested">Customer requested</option>
-                  <option value="Fraud suspected">Fraud suspected</option>
-                </select>
-              </div>
-              <div className="modal-footer" style={{ padding: 0, marginTop: '10px' }}>
-                <button type="button" className="btn-back" onClick={() => setCancelModalState({ ...cancelModalState, isOpen: false })}>Go Back</button>
-                <button type="submit" className="btn-submit-modal" style={{ flex: 1, background: 'var(--red)' }}>Confirm Cancel</button>
-              </div>
             </form>
           </div>
         </div>

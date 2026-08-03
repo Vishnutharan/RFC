@@ -1,0 +1,14 @@
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/0
+  value:
+    name: rds-ca
+    mountPath: /etc/ssl/certs/rds-ca-rsa2048-g1.pem
+    subPath: rds-ca-rsa2048-g1.pem
+    readOnly: true
+- op: add
+  path: /spec/template/spec/volumes/0
+  value:
+    name: rds-ca
+    configMap:
+      name: rfc-rds-ca
+      defaultMode: 0444

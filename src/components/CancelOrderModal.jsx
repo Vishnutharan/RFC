@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 
 const CANCEL_REASONS = [
@@ -160,4 +160,3 @@ export default function CancelOrderModal({ isOpen, onClose, order, onConfirmCanc
     </div>
   );
 }
-

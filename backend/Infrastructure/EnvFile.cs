@@ -4,32 +4,33 @@ public static class EnvFile
 {
     public static void LoadFromCommonLocations()
     {
-        var current = Directory.GetCurrentDirectory();
-        var currentParent = Directory.GetParent(current)?.FullName;
-        var baseDir = AppContext.BaseDirectory;
-        var baseParent = Directory.GetParent(baseDir)?.FullName;
-
-        var candidates = new[]
+        // Production configuration must come from the process environment or the
+        // platform secret provider. Dotenv files are a local-development aid only.
+        if (!ShouldLoadDotEnv())
         {
-            Path.Combine(current, ".env"),
-            Path.Combine(current, ".env.local"),
-            currentParent == null ? null : Path.Combine(currentParent, ".env"),
-            currentParent == null ? null : Path.Combine(currentParent, ".env.local"),
+            return;
+        }
+
+        var current = Directory.GetCurrentDirectory();
+        var baseDir = AppContext.BaseDirectory;
+
+        var roots = new[]
+        {
             Path.Combine(current, "backend", ".env"),
-            Path.Combine(current, "backend", ".env.local"),
-            Path.Combine(baseDir, ".env"),
-            Path.Combine(baseDir, ".env.local"),
-            baseParent == null ? null : Path.Combine(baseParent, ".env"),
-            baseParent == null ? null : Path.Combine(baseParent, ".env.local")
+            Path.Combine(current, ".env"),
+            Path.Combine(baseDir, ".env")
         };
 
-        foreach (var path in candidates.Where(path => path != null).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var envPath in roots.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            Load(path!, overrideExisting: path!.EndsWith(".env.local", StringComparison.OrdinalIgnoreCase));
+            // Load the more-specific local file first. Load() never overwrites a
+            // value already supplied by the host, container, or secret provider.
+            Load($"{envPath}.local");
+            Load(envPath);
         }
     }
 
-    public static void Load(string path, bool overrideExisting = false)
+    public static void Load(string path)
     {
         if (!File.Exists(path)) return;
 
@@ -44,10 +45,23 @@ public static class EnvFile
             var key = line[..separatorIndex].Trim();
             var value = line[(separatorIndex + 1)..].Trim().Trim('"');
 
-            if (overrideExisting || string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+            if (Environment.GetEnvironmentVariable(key) is null)
             {
                 Environment.SetEnvironmentVariable(key, value);
             }
         }
+    }
+
+    private static bool ShouldLoadDotEnv()
+    {
+        var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+        return string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(environmentName, "Test", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                Environment.GetEnvironmentVariable("RFC_LOAD_DOTENV"),
+                "true",
+                StringComparison.OrdinalIgnoreCase);
     }
 }

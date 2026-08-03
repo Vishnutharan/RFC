@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,8 +29,14 @@ public class AdminController : ControllerBase
         "Out for Delivery",
         "Ready for Collection",
         "Completed",
-        "Cancelled"
+        "Cancelled",
+        "Cancellation Pending"
     };
+
+    private static readonly string[] RequiredOpeningDays =
+    [
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+    ];
 
     private readonly RfcDbContext? _db;
     private readonly AuditService? _audit;
@@ -54,14 +61,30 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("orders")]
-    public async Task<IActionResult> GetAllOrders()
+    public async Task<IActionResult> GetAllOrders(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] string? status = null)
     {
         if (_db == null) return ServiceUnavailable();
 
         try
         {
-            var dbOrders = await _db.Orders.AsNoTracking()
+            var safePage = Math.Max(1, page);
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var cleanStatus = InputSanitizer.CleanNullable(status, 30);
+            var query = _db.Orders.AsNoTracking();
+            if (!string.IsNullOrWhiteSpace(cleanStatus))
+            {
+                if (!ValidStatuses.Contains(cleanStatus))
+                    return BadRequest(new { message = "Unsupported order status filter." });
+                query = query.Where(order => order.OrderStatus == cleanStatus);
+            }
+
+            var dbOrders = await query
                 .OrderByDescending(o => o.CreatedAt)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
                 .ToListAsync(HttpContext.RequestAborted);
             return Ok(dbOrders.Select(OrdersController.MapToOrderDto).ToList());
         }
@@ -93,6 +116,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPost("menu")]
+    [Authorize(Policy = "ManagerOnly")]
     [EnableRateLimiting("order-write")]
     public async Task<IActionResult> CreateMenuItem([FromBody] AdminMenuItemRequest request)
     {
@@ -144,6 +168,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPut("menu/{id}")]
+    [Authorize(Policy = "ManagerOnly")]
     [EnableRateLimiting("order-write")]
     public async Task<IActionResult> UpdateMenuItem(string id, [FromBody] AdminMenuItemRequest request)
     {
@@ -199,6 +224,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpDelete("menu/{id}")]
+    [Authorize(Policy = "ManagerOnly")]
     [EnableRateLimiting("order-write")]
     public async Task<IActionResult> ArchiveMenuItem(string id)
     {
@@ -224,12 +250,15 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("customers")]
-    public async Task<IActionResult> GetCustomers()
+    [Authorize(Policy = "ManagerOnly")]
+    public async Task<IActionResult> GetCustomers([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         if (_db == null) return ServiceUnavailable();
 
         try
         {
+            var safePage = Math.Max(1, page);
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
             var customers = await _db.Customers.AsNoTracking()
                 .Select(customer => new
                 {
@@ -250,6 +279,8 @@ public class AdminController : ControllerBase
                         .Max(order => (DateTime?)order.CreatedAt)
                 })
                 .OrderByDescending(customer => customer.LastOrderAt ?? customer.CreatedAt)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
                 .ToListAsync(HttpContext.RequestAborted);
 
             return Ok(customers);
@@ -262,6 +293,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("staff")]
+    [Authorize(Policy = "ManagerOnly")]
     public async Task<IActionResult> GetStaffUsers()
     {
         if (_db == null) return ServiceUnavailable();
@@ -290,6 +322,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPost("staff")]
+    [Authorize(Policy = "ManagerOnly")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> CreateStaffUser([FromBody] AdminStaffRequest request)
     {
@@ -333,6 +366,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPut("staff/{id}")]
+    [Authorize(Policy = "ManagerOnly")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> UpdateStaffUser(string id, [FromBody] AdminStaffUpdateRequest request)
     {
@@ -345,23 +379,44 @@ public class AdminController : ControllerBase
             var staff = await _db.StaffUsers.FirstOrDefaultAsync(user => user.Id == cleanId, HttpContext.RequestAborted);
             if (staff == null) return NotFound(new { message = "Staff user not found." });
 
+            var normalizedRole = NormalizeStaffRole(request.Role);
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (staff.Id == currentUserId && (!request.IsActive || normalizedRole != "manager"))
+            {
+                return BadRequest(new { message = "You cannot deactivate or remove the manager role from your own active session." });
+            }
+
+            if (staff.Role == "manager" && (!request.IsActive || normalizedRole != "manager"))
+            {
+                var activeManagers = await _db.StaffUsers.CountAsync(
+                    user => user.IsActive && user.Role == "manager",
+                    HttpContext.RequestAborted);
+                if (activeManagers <= 1)
+                {
+                    return Conflict(new { message = "At least one active manager account is required." });
+                }
+            }
+
             var oldValue = new { staff.Name, staff.Role, staff.IsActive };
             staff.Name = InputSanitizer.Clean(request.Name, 100);
-            staff.Role = NormalizeStaffRole(request.Role);
+            staff.Role = normalizedRole;
             staff.IsActive = request.IsActive;
+            var passwordChanged = !string.IsNullOrWhiteSpace(request.Password);
 
-            if (!string.IsNullOrWhiteSpace(request.Password))
+            if (passwordChanged)
             {
                 if (!PasswordPolicy.IsValid(request.Password))
                 {
                     return BadRequest(new { message = PasswordPolicy.Message });
                 }
 
-                staff.PasswordHash = PasswordHasher.Hash(request.Password);
+                staff.PasswordHash = PasswordHasher.Hash(request.Password!);
             }
 
+            staff.SecurityStamp = Guid.NewGuid().ToString("N");
+
             await _db.SaveChangesAsync(HttpContext.RequestAborted);
-            if (_audit != null) await _audit.LogAsync("UpdateStaffUser", "StaffUser", staff.Id, oldValue, new { staff.Name, staff.Role, staff.IsActive, PasswordChanged = !string.IsNullOrWhiteSpace(request.Password) });
+            if (_audit != null) await _audit.LogAsync("UpdateStaffUser", "StaffUser", staff.Id, oldValue, new { staff.Name, staff.Role, staff.IsActive, PasswordChanged = passwordChanged });
             return Ok(new { staff.Id, staff.Name, staff.Email, staff.Role, staff.IsActive, staff.CreatedAt });
         }
         catch (Exception ex)
@@ -372,6 +427,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("audit")]
+    [Authorize(Policy = "ManagerOnly")]
     public async Task<IActionResult> GetAuditLogs([FromQuery] int limit = 80)
     {
         if (_db == null) return ServiceUnavailable();
@@ -393,6 +449,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpGet("settings")]
+    [Authorize(Policy = "ManagerOnly")]
     public async Task<IActionResult> GetStoreSettings()
     {
         if (_db == null) return ServiceUnavailable();
@@ -412,6 +469,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPut("settings/{key}")]
+    [Authorize(Policy = "ManagerOnly")]
     [EnableRateLimiting("order-write")]
     public async Task<IActionResult> UpdateStoreSetting(string key, [FromBody] AdminStoreSettingRequest request)
     {
@@ -419,10 +477,19 @@ public class AdminController : ControllerBase
 
         var cleanKey = InputSanitizer.Clean(key, 120);
         if (string.IsNullOrWhiteSpace(cleanKey)) return BadRequest(new { message = "Setting key is required." });
+        if (!string.Equals(cleanKey, "OpeningHours", StringComparison.Ordinal))
+            return BadRequest(new { message = "Unsupported setting key." });
 
         try
         {
-            using var _ = JsonDocument.Parse(request.Value);
+            using var document = JsonDocument.Parse(request.Value);
+            if (!HasValidOpeningHours(document.RootElement))
+            {
+                return BadRequest(new
+                {
+                    message = "OpeningHours must define open and close times in HH:mm format for every day of the week."
+                });
+            }
             var setting = await _db.StoreSettings.FirstOrDefaultAsync(item => item.Key == cleanKey, HttpContext.RequestAborted);
             var oldValue = setting?.Value;
 
@@ -462,11 +529,19 @@ public class AdminController : ControllerBase
         {
             return BadRequest(new { message = "Unsupported order status." });
         }
+        if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Cancellation Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            return Conflict(new
+            {
+                message = "Cancellation must use the dedicated cancellation workflow so refunds and stock are handled safely."
+            });
+        }
 
         try
         {
             var cleanId = InputSanitizer.Clean(id, 80);
-            var dbOrder = await _db.Orders.FirstOrDefaultAsync(
+            var dbOrder = await _db.Orders.AsNoTracking().FirstOrDefaultAsync(
                 o => o.Id == cleanId || o.OrderNumber == cleanId,
                 HttpContext.RequestAborted);
             if (dbOrder == null) return NotFound(new { message = "Order not found" });
@@ -477,15 +552,42 @@ public class AdminController : ControllerBase
                 return Conflict(new { message = $"Cannot move order from {oldStatus} to {status}." });
             }
 
-            dbOrder.OrderStatus = status;
-
-            if (status == "Out for Delivery" && dbOrder.DeliveryLat != null && dbOrder.DeliveryLng != null)
+            if ((status == "Out for Delivery" && dbOrder.OrderType != "delivery") ||
+                (status == "Ready for Collection" && dbOrder.OrderType != "collection"))
             {
-                dbOrder.EtaMinutes = await _maps.GetEtaMinutesAsync(dbOrder.DeliveryLat.Value, dbOrder.DeliveryLng.Value, HttpContext.RequestAborted)
-                    ?? dbOrder.EtaMinutes;
+                return Conflict(new { message = $"Status {status} is not valid for a {dbOrder.OrderType} order." });
             }
 
-            await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            var etaMinutes = dbOrder.EtaMinutes;
+            if (status == "Out for Delivery" && dbOrder.DeliveryLat != null && dbOrder.DeliveryLng != null)
+            {
+                etaMinutes = await _maps.GetEtaMinutesAsync(dbOrder.DeliveryLat.Value, dbOrder.DeliveryLng.Value, HttpContext.RequestAborted)
+                    ?? etaMinutes;
+            }
+
+            if (_db.Database.IsRelational())
+            {
+                var updated = await _db.Orders
+                    .Where(order => order.Id == dbOrder.Id && order.OrderStatus == oldStatus)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(order => order.OrderStatus, status)
+                        .SetProperty(order => order.EtaMinutes, etaMinutes),
+                        HttpContext.RequestAborted);
+                if (updated != 1)
+                {
+                    return Conflict(new { message = "The order changed while this update was being processed. Refresh and try again." });
+                }
+
+                dbOrder.OrderStatus = status;
+                dbOrder.EtaMinutes = etaMinutes;
+            }
+            else
+            {
+                dbOrder.OrderStatus = status;
+                dbOrder.EtaMinutes = etaMinutes;
+                _db.Orders.Update(dbOrder);
+                await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            }
 
             if (_audit != null)
             {
@@ -494,18 +596,25 @@ public class AdminController : ControllerBase
 
             if (status == "Out for Delivery")
             {
-                _notifications.SendOutForDeliveryInBackground(dbOrder);
+                await _notifications.SendOutForDeliveryAsync(dbOrder);
             }
 
-            await _hubContext.Clients
-                .Group(OrderHub.Normalize(dbOrder.OrderNumber))
-                .SendAsync("OrderStatusUpdated", new
-                {
-                    orderNumber = dbOrder.OrderNumber,
-                    status = dbOrder.OrderStatus,
-                    timestamp = DateTime.UtcNow,
-                    etaMinutes = dbOrder.EtaMinutes
-                });
+            try
+            {
+                await _hubContext.Clients
+                    .Group(OrderHub.Normalize(dbOrder.OrderNumber))
+                    .SendAsync("OrderStatusUpdated", new
+                    {
+                        orderNumber = dbOrder.OrderNumber,
+                        status = dbOrder.OrderStatus,
+                        timestamp = DateTime.UtcNow,
+                        etaMinutes = dbOrder.EtaMinutes
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Order {OrderId} was updated but the realtime notification failed.", dbOrder.Id);
+            }
 
             return Ok(new { success = true, orderId = id, orderStatus = status, etaMinutes = dbOrder.EtaMinutes });
         }
@@ -525,6 +634,35 @@ public class AdminController : ControllerBase
     {
         var clean = (role ?? "staff").Trim().ToLowerInvariant();
         return clean is "manager" or "staff" ? clean : "staff";
+    }
+
+    private static bool HasValidOpeningHours(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return false;
+
+        foreach (var dayName in RequiredOpeningDays)
+        {
+            if (!root.TryGetProperty(dayName, out var day) || day.ValueKind != JsonValueKind.Object ||
+                !day.TryGetProperty("open", out var openValue) || openValue.ValueKind != JsonValueKind.String ||
+                !day.TryGetProperty("close", out var closeValue) || closeValue.ValueKind != JsonValueKind.String ||
+                !TimeOnly.TryParseExact(
+                    openValue.GetString(),
+                    "HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out _) ||
+                !TimeOnly.TryParseExact(
+                    closeValue.GetString(),
+                    "HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out _))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 
@@ -573,8 +711,8 @@ public sealed class AdminStaffRequest
     public string Email { get; set; } = string.Empty;
 
     [Required]
-    [MinLength(8)]
-    [MaxLength(200)]
+    [MinLength(12)]
+    [MaxLength(128)]
     public string Password { get; set; } = string.Empty;
 
     [MaxLength(30)]
@@ -590,7 +728,7 @@ public sealed class AdminStaffUpdateRequest
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
-    [MaxLength(200)]
+    [MaxLength(128)]
     public string? Password { get; set; }
 
     [MaxLength(30)]
@@ -602,5 +740,6 @@ public sealed class AdminStaffUpdateRequest
 public sealed class AdminStoreSettingRequest
 {
     [Required]
+    [MaxLength(10_000)]
     public string Value { get; set; } = "{}";
 }

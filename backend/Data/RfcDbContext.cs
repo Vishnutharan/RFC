@@ -15,6 +15,8 @@ public class RfcDbContext : DbContext
     public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<StoreSetting> StoreSettings => Set<StoreSetting>();
+    public DbSet<PaymentWebhookEvent> PaymentWebhookEvents => Set<PaymentWebhookEvent>();
+    public DbSet<VoucherRedemption> VoucherRedemptions => Set<VoucherRedemption>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -69,7 +71,16 @@ public class RfcDbContext : DbContext
             entity.Property(order => order.OrderTime).HasColumnName("order_time").HasMaxLength(100);
             entity.Property(order => order.CancellationReason).HasColumnName("cancellation_reason").HasMaxLength(500);
             entity.Property(order => order.StripePaymentIntentId).HasColumnName("stripe_payment_intent_id").HasMaxLength(200);
-            entity.HasIndex(order => order.StripePaymentIntentId);
+            entity.HasIndex(order => order.StripePaymentIntentId)
+                .IsUnique()
+                .HasFilter("stripe_payment_intent_id IS NOT NULL");
+            entity.Property(order => order.CheckoutId).HasColumnName("checkout_id").HasMaxLength(80);
+            entity.HasIndex(order => order.CheckoutId)
+                .IsUnique()
+                .HasFilter("checkout_id IS NOT NULL");
+            entity.HasIndex(order => order.CreatedAt);
+            entity.HasIndex(order => new { order.OrderStatus, order.CreatedAt });
+            entity.HasIndex(order => order.CustomerEmail);
             entity.Property(order => order.DeliveryLat).HasColumnName("delivery_lat").HasPrecision(9, 6);
             entity.Property(order => order.DeliveryLng).HasColumnName("delivery_lng").HasPrecision(9, 6);
             entity.Property(order => order.EtaMinutes).HasColumnName("eta_minutes");
@@ -91,6 +102,7 @@ public class RfcDbContext : DbContext
             entity.Property(review => review.Status).HasColumnName("status").HasMaxLength(30);
             entity.Property(review => review.Response).HasColumnName("response").HasMaxLength(1000);
             entity.Property(review => review.Date).HasColumnName("date");
+            entity.HasIndex(review => new { review.Status, review.Date });
         });
 
         modelBuilder.Entity<DbCustomer>(entity =>
@@ -104,6 +116,7 @@ public class RfcDbContext : DbContext
             entity.Property(customer => customer.Address).HasColumnName("address").HasMaxLength(400);
             entity.Property(customer => customer.Postcode).HasColumnName("postcode").HasMaxLength(20);
             entity.Property(customer => customer.PasswordHash).HasColumnName("password_hash").HasMaxLength(300).IsRequired();
+            entity.Property(customer => customer.SecurityStamp).HasColumnName("security_stamp").HasMaxLength(64).IsRequired();
             entity.Property(customer => customer.CreatedAt).HasColumnName("created_at");
             entity.Property(customer => customer.UpdatedAt).HasColumnName("updated_at");
             entity.HasIndex(customer => customer.Email).IsUnique();
@@ -117,6 +130,7 @@ public class RfcDbContext : DbContext
             entity.Property(staff => staff.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
             entity.Property(staff => staff.Email).HasColumnName("email").HasMaxLength(120).IsRequired();
             entity.Property(staff => staff.PasswordHash).HasColumnName("password_hash").HasMaxLength(300).IsRequired();
+            entity.Property(staff => staff.SecurityStamp).HasColumnName("security_stamp").HasMaxLength(64).IsRequired();
             entity.Property(staff => staff.Role).HasColumnName("role").HasMaxLength(30).IsRequired();
             entity.Property(staff => staff.IsActive).HasColumnName("is_active");
             entity.Property(staff => staff.CreatedAt).HasColumnName("created_at");
@@ -148,6 +162,7 @@ public class RfcDbContext : DbContext
             entity.Property(log => log.NewValue).HasColumnName("new_value").HasColumnType("jsonb");
             entity.Property(log => log.Timestamp).HasColumnName("timestamp");
             entity.Property(log => log.IpAddress).HasColumnName("ip_address").HasMaxLength(80);
+            entity.HasIndex(log => log.Timestamp);
         });
 
         modelBuilder.Entity<StoreSetting>(entity =>
@@ -156,6 +171,30 @@ public class RfcDbContext : DbContext
             entity.HasKey(setting => setting.Key);
             entity.Property(setting => setting.Key).HasColumnName("key").HasMaxLength(120);
             entity.Property(setting => setting.Value).HasColumnName("value").HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<PaymentWebhookEvent>(entity =>
+        {
+            entity.ToTable("payment_webhook_events");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Id).HasColumnName("id").HasMaxLength(120);
+            entity.Property(item => item.Type).HasColumnName("type").HasMaxLength(120).IsRequired();
+            entity.Property(item => item.PaymentIntentId).HasColumnName("payment_intent_id").HasMaxLength(200);
+            entity.Property(item => item.ReceivedAt).HasColumnName("received_at");
+            entity.Property(item => item.ProcessedAt).HasColumnName("processed_at");
+            entity.HasIndex(item => item.ReceivedAt);
+        });
+
+        modelBuilder.Entity<VoucherRedemption>(entity =>
+        {
+            entity.ToTable("voucher_redemptions");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Id).HasColumnName("id").HasMaxLength(80);
+            entity.Property(item => item.Code).HasColumnName("code").HasMaxLength(50).IsRequired();
+            entity.Property(item => item.CustomerId).HasColumnName("customer_id").HasMaxLength(80).IsRequired();
+            entity.Property(item => item.OrderId).HasColumnName("order_id").HasMaxLength(80).IsRequired();
+            entity.Property(item => item.RedeemedAt).HasColumnName("redeemed_at");
+            entity.HasIndex(item => new { item.Code, item.CustomerId }).IsUnique();
         });
     }
 }
@@ -186,6 +225,7 @@ public class DbOrder
     public string OrderTime { get; set; } = string.Empty;
     public string? CancellationReason { get; set; }
     public string? StripePaymentIntentId { get; set; }
+    public string? CheckoutId { get; set; }
     public decimal? DeliveryLat { get; set; }
     public decimal? DeliveryLng { get; set; }
     public int? EtaMinutes { get; set; }
@@ -213,6 +253,7 @@ public class StaffUser
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
     public string Role { get; set; } = "staff";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -244,4 +285,22 @@ public class StoreSetting
 {
     public string Key { get; set; } = string.Empty;
     public string Value { get; set; } = "{}";
+}
+
+public class PaymentWebhookEvent
+{
+    public string Id { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string? PaymentIntentId { get; set; }
+    public DateTime ReceivedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? ProcessedAt { get; set; }
+}
+
+public class VoucherRedemption
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Code { get; set; } = string.Empty;
+    public string CustomerId { get; set; } = string.Empty;
+    public string OrderId { get; set; } = string.Empty;
+    public DateTime RedeemedAt { get; set; } = DateTime.UtcNow;
 }

@@ -27,6 +27,10 @@ export const updateCustomerProfile = async (updatedFields) => {
   });
 };
 
+export const getCustomerOrders = async (page = 1, pageSize = 20) => {
+  return requestJson(`/auth/customers/me/orders?page=${encodeURIComponent(page)}&pageSize=${encodeURIComponent(pageSize)}`);
+};
+
 export const logoutCustomer = async () => {
   await requestJson('/auth/logout', { method: 'POST', body: '{}' });
 };

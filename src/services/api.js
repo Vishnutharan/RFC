@@ -71,6 +71,8 @@ export const requestJson = async (path, options = {}) => {
 
 export const getMenuItems = async () => requestJson('/menu');
 
+export const getPublicConfig = async () => requestJson('/config/public');
+
 export const validateVoucher = (code, subtotal = 0) => {
   const cleanCode = (code || '').trim().toUpperCase();
   const voucher = INITIAL_VOUCHERS.find((v) => v.code === cleanCode);
@@ -118,7 +120,7 @@ export const cancelOrder = async (orderIdOrNumber, reason, accessToken) => {
   return requestJson(`/orders/${encodeURIComponent(orderIdOrNumber)}/cancel`, {
     method: 'PUT',
     headers: orderAccessOptions(accessToken).headers,
-    body: JSON.stringify({ reason, accessToken })
+    body: JSON.stringify({ reason })
   });
 };
 
@@ -194,10 +196,10 @@ export const updateOrderStatus = async (orderId, newStatus) => {
   });
 };
 
-export const createPaymentIntent = async ({ order }) => {
+export const createPaymentIntent = async ({ checkoutId, order }) => {
   return requestJson('/payments/create-intent', {
     method: 'POST',
-    body: JSON.stringify({ order })
+    body: JSON.stringify({ checkoutId, order })
   });
 };
 

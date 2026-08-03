@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, Printer, CheckCircle } from 'lucide-react';
+import { X, Printer } from 'lucide-react';
 
 const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
 const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);

@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -49,7 +51,7 @@ public class AuthController : ControllerBase
         var email = NormalizeEmail(request.Email);
         try
         {
-            if (await IsLockedOutAsync(email))
+            if (await IsLockedOutAsync(email, "staff"))
             {
                 _logger.LogWarning("Locked staff login attempt for {Email}", email);
                 return Unauthorized(new { message = "Invalid email or password." });
@@ -60,13 +62,20 @@ public class AuthController : ControllerBase
                 HttpContext.RequestAborted);
             if (staff == null || !PasswordHasher.Verify(request.Password, staff.PasswordHash))
             {
-                await RecordFailedLoginAsync(email);
+                await RecordFailedLoginAsync(email, "staff");
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
-            await ClearFailedLoginAsync(email);
+            if (PasswordHasher.NeedsRehash(staff.PasswordHash))
+            {
+                staff.PasswordHash = PasswordHasher.Hash(request.Password);
+                staff.SecurityStamp = Guid.NewGuid().ToString("N");
+                await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            }
+
+            await ClearFailedLoginAsync(email, "staff");
             var user = new AuthUserDto(staff.Id, staff.Name, staff.Email, staff.Role);
-            await SignInAsync(user, isPersistent: false);
+            await SignInAsync(user, staff.SecurityStamp, isPersistent: false);
             if (_audit != null) await _audit.LogAsync("Login", "StaffUser", staff.Id, null, new { staff.Email, staff.Role });
             return Ok(user);
         }
@@ -117,7 +126,7 @@ public class AuthController : ControllerBase
             await _db.SaveChangesAsync(HttpContext.RequestAborted);
 
             var user = ToCustomerDto(customer);
-            await SignInAsync(user, isPersistent: true);
+            await SignInAsync(user, customer.SecurityStamp, isPersistent: true);
             return Ok(user);
         }
         catch (Exception ex)
@@ -136,7 +145,7 @@ public class AuthController : ControllerBase
         var email = NormalizeEmail(request.Email);
         try
         {
-            if (await IsLockedOutAsync(email))
+            if (await IsLockedOutAsync(email, "customer"))
             {
                 return Unauthorized(new { message = "Invalid email or password." });
             }
@@ -144,13 +153,21 @@ public class AuthController : ControllerBase
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Email == email, HttpContext.RequestAborted);
             if (customer == null || !PasswordHasher.Verify(request.Password, customer.PasswordHash))
             {
-                await RecordFailedLoginAsync(email);
+                await RecordFailedLoginAsync(email, "customer");
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
-            await ClearFailedLoginAsync(email);
+            if (PasswordHasher.NeedsRehash(customer.PasswordHash))
+            {
+                customer.PasswordHash = PasswordHasher.Hash(request.Password);
+                customer.SecurityStamp = Guid.NewGuid().ToString("N");
+                customer.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            }
+
+            await ClearFailedLoginAsync(email, "customer");
             var user = ToCustomerDto(customer);
-            await SignInAsync(user, isPersistent: true);
+            await SignInAsync(user, customer.SecurityStamp, isPersistent: true);
             return Ok(user);
         }
         catch (Exception ex)
@@ -215,12 +232,39 @@ public class AuthController : ControllerBase
             await _db.SaveChangesAsync(HttpContext.RequestAborted);
 
             var user = ToCustomerDto(customer);
-            await SignInAsync(user, isPersistent: true);
+            await SignInAsync(user, customer.SecurityStamp, isPersistent: true);
             return Ok(user);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update customer {CustomerId}", id);
+            return ServiceUnavailable();
+        }
+    }
+
+    [Authorize(Policy = "CustomerOnly")]
+    [HttpGet("customers/me/orders")]
+    public async Task<IActionResult> GetCustomerOrders([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        if (_db == null) return ServiceUnavailable();
+
+        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        try
+        {
+            var orders = await _db.Orders.AsNoTracking()
+                .Where(order => order.CustomerId == customerId)
+                .OrderByDescending(order => order.CreatedAt)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync(HttpContext.RequestAborted);
+
+            return Ok(orders.Select(OrdersController.MapToOrderDto));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load orders for customer {CustomerId}", customerId);
             return ServiceUnavailable();
         }
     }
@@ -237,19 +281,52 @@ public class AuthController : ControllerBase
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.Id == id, HttpContext.RequestAborted);
             if (customer == null) return NotFound(new { message = "Customer account not found." });
 
+            await using var transaction = await _db.Database.BeginTransactionAsync(HttpContext.RequestAborted);
             var anonymousEmail = $"deleted-{customer.Id}@deleted.local";
             var orders = await _db.Orders
-                .Where(order => order.CustomerEmail == customer.Email)
+                .Where(order => order.CustomerId == customer.Id)
                 .ToListAsync(HttpContext.RequestAborted);
+            var orderNumbers = orders.Select(order => order.OrderNumber).ToList();
             foreach (var order in orders)
             {
                 order.CustomerName = "Deleted Customer";
                 order.CustomerEmail = anonymousEmail;
+                order.CustomerId = null;
                 order.CustomerPhone = string.Empty;
                 order.DeliveryAddress = "Anonymised";
                 order.DeliveryPostcode = string.Empty;
                 order.DeliveryNotes = string.Empty;
+                order.OrderAccessTokenHash = null;
+                order.OrderAccessTokenExpiresAt = null;
             }
+
+            var feedback = await _db.Reviews
+                .Where(review => review.OrderNumber != null && orderNumbers.Contains(review.OrderNumber))
+                .ToListAsync(HttpContext.RequestAborted);
+            foreach (var item in feedback)
+            {
+                item.CustomerName = "Deleted Customer";
+                item.OrderNumber = null;
+                item.Comment = "Removed at the account holder's request.";
+            }
+
+            var auditRows = await _db.AuditLogs
+                .Where(log => log.UserId == customer.Id ||
+                              (log.EntityType == "Customer" && log.EntityId == customer.Id))
+                .ToListAsync(HttpContext.RequestAborted);
+            foreach (var log in auditRows)
+            {
+                log.UserId = null;
+                log.EntityId = null;
+                log.OldValue = null;
+                log.NewValue = null;
+                log.IpAddress = null;
+            }
+
+            var voucherRedemptions = await _db.VoucherRedemptions
+                .Where(item => item.CustomerId == customer.Id)
+                .ToListAsync(HttpContext.RequestAborted);
+            _db.VoucherRedemptions.RemoveRange(voucherRedemptions);
 
             customer.Name = "Deleted Customer";
             customer.Email = anonymousEmail;
@@ -257,8 +334,10 @@ public class AuthController : ControllerBase
             customer.Address = "Anonymised";
             customer.Postcode = string.Empty;
             customer.PasswordHash = PasswordHasher.Hash(Guid.NewGuid().ToString("N") + "Aa1");
+            customer.SecurityStamp = Guid.NewGuid().ToString("N");
             customer.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(HttpContext.RequestAborted);
+            await transaction.CommitAsync(HttpContext.RequestAborted);
 
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Ok(new { success = true });
@@ -284,26 +363,28 @@ public class AuthController : ControllerBase
         return Ok(new { success = true });
     }
 
-    private async Task<bool> IsLockedOutAsync(string email)
+    private async Task<bool> IsLockedOutAsync(string email, string realm)
     {
         if (_db == null) return false;
 
-        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == email, HttpContext.RequestAborted);
+        var key = BuildLoginAttemptKey(email, realm);
+        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == key, HttpContext.RequestAborted);
         return attempt?.LockedUntil != null && attempt.LockedUntil > DateTime.UtcNow;
     }
 
-    private async Task RecordFailedLoginAsync(string email)
+    private async Task RecordFailedLoginAsync(string email, string realm)
     {
         if (_db == null) return;
 
         var now = DateTime.UtcNow;
-        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == email, HttpContext.RequestAborted);
+        var key = BuildLoginAttemptKey(email, realm);
+        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == key, HttpContext.RequestAborted);
         if (attempt == null)
         {
             attempt = new LoginAttempt
             {
                 Id = Guid.NewGuid().ToString("N"),
-                Email = email,
+                Email = key,
                 AttemptCount = 1,
                 LastAttemptAt = now
             };
@@ -325,30 +406,26 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync(HttpContext.RequestAborted);
     }
 
-    private async Task ClearFailedLoginAsync(string email)
+    private async Task ClearFailedLoginAsync(string email, string realm)
     {
         if (_db == null) return;
 
-        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == email, HttpContext.RequestAborted);
+        var key = BuildLoginAttemptKey(email, realm);
+        var attempt = await _db.LoginAttempts.FirstOrDefaultAsync(item => item.Email == key, HttpContext.RequestAborted);
         if (attempt == null) return;
 
         _db.LoginAttempts.Remove(attempt);
         await _db.SaveChangesAsync(HttpContext.RequestAborted);
     }
 
-    private async Task SignInAsync(AuthUserDto user, bool isPersistent)
+    private async Task SignInAsync(AuthUserDto user, string securityStamp, bool isPersistent)
     {
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id),
-            new(ClaimTypes.Name, user.Name),
-            new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Role, user.Role)
+            new(ClaimTypes.Role, user.Role),
+            new("security_stamp", securityStamp)
         };
-
-        if (!string.IsNullOrWhiteSpace(user.Phone)) claims.Add(new("phone", user.Phone));
-        if (!string.IsNullOrWhiteSpace(user.Address)) claims.Add(new("address", user.Address));
-        if (!string.IsNullOrWhiteSpace(user.Postcode)) claims.Add(new("postcode", user.Postcode));
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
@@ -356,8 +433,15 @@ public class AuthController : ControllerBase
         {
             IsPersistent = isPersistent,
             AllowRefresh = true,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(isPersistent ? 24 : 8)
+            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(isPersistent ? 8 : 4)
         });
+    }
+
+    private string BuildLoginAttemptKey(string email, string realm)
+    {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var value = $"{realm}|{email}|{ipAddress}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     }
 
     private static AuthUserDto ToCustomerDto(DbCustomer customer)

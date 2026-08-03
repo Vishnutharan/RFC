@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,70 @@ public class OrdersControllerTests
         Assert.True(await fixture.Db.Orders.AnyAsync());
     }
 
+    [Fact]
+    public async Task CreateOrder_RefundsCapturedPaymentWhenCheckoutNoLongerMatches()
+    {
+        var fixture = CreateFixture(verifyResult: new PaymentGatewayResult(
+            false,
+            false,
+            "Card payment could not be matched to this checkout.",
+            ShouldCompensate: true));
+        SeedMenuItem(fixture.Db, stockCount: 5);
+
+        var result = await fixture.Controller.CreateOrder(CreateOrder(quantity: 1, paymentMethod: "card"));
+
+        Assert.IsType<ConflictObjectResult>(result);
+        Assert.Equal(1, fixture.Payments.VerifyCalls);
+        Assert.Equal(1, fixture.Payments.RefundCalls);
+        Assert.False(await fixture.Db.Orders.AnyAsync());
+        Assert.Equal(5, (await fixture.Db.MenuItems.SingleAsync()).StockCount);
+    }
+
+    [Fact]
+    public async Task CreateOrder_ReturnsExistingOwnedOrderForIdempotentCardRetry()
+    {
+        var fixture = CreateFixture();
+        var request = CreateOrder(quantity: 1, paymentMethod: "card");
+        fixture.Db.Orders.Add(new DbOrder
+        {
+            Id = "existing-order",
+            OrderNumber = "RFC-EXISTING",
+            OrderType = "collection",
+            CustomerId = "customer-1",
+            CustomerName = "Test Customer",
+            CustomerPhone = "07123456789",
+            CustomerEmail = "customer@example.com",
+            ItemsJson = "[]",
+            PaymentMethod = "card",
+            PaymentStatus = "Paid",
+            StripePaymentIntentId = request.StripePaymentIntentId,
+            CheckoutId = request.CheckoutId
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var result = await fixture.Controller.CreateOrder(request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var existing = Assert.IsType<Order>(ok.Value);
+        Assert.Equal("existing-order", existing.Id);
+        Assert.Equal(0, fixture.Payments.VerifyCalls);
+        Assert.Single(await fixture.Db.Orders.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateOrder_RejectsMissingPaymentIntentBeforeDatabaseMatching()
+    {
+        var fixture = CreateFixture();
+        var request = CreateOrder(quantity: 1, paymentMethod: "card");
+        request.StripePaymentIntentId = null;
+
+        var result = await fixture.Controller.CreateOrder(request);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal(0, fixture.Payments.VerifyCalls);
+        Assert.False(await fixture.Db.Orders.AnyAsync());
+    }
+
     private static ControllerFixture CreateFixture(PaymentGatewayResult? verifyResult = null)
     {
         var services = new ServiceCollection();
@@ -118,7 +183,16 @@ public class OrdersControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = new DefaultHttpContext { RequestServices = provider }
+                HttpContext = new DefaultHttpContext
+                {
+                    RequestServices = provider,
+                    User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, "customer-1"),
+                        new Claim(ClaimTypes.Email, "customer@example.com"),
+                        new Claim(ClaimTypes.Role, "customer")
+                    }, "TestAuth"))
+                }
             }
         };
 
@@ -156,7 +230,8 @@ public class OrdersControllerTests
             DeliveryFee = 0,
             Total = subtotal,
             PaymentMethod = paymentMethod,
-            StripePaymentIntentId = paymentMethod == "card" ? "pi_test_123" : null
+            StripePaymentIntentId = paymentMethod == "card" ? "pi_test_123" : null,
+            CheckoutId = paymentMethod == "card" ? Guid.NewGuid().ToString("N") : null
         };
     }
 
@@ -176,15 +251,25 @@ public class OrdersControllerTests
         }
 
         public int VerifyCalls { get; private set; }
+        public int RefundCalls { get; private set; }
 
-        public Task<PaymentGatewayResult> VerifyPaymentIntentAsync(string? paymentIntentId, decimal expectedTotal, CancellationToken cancellationToken)
+        public Task<PaymentGatewayResult> VerifyPaymentIntentAsync(
+            string? paymentIntentId,
+            decimal expectedTotal,
+            string expectedCustomerId,
+            string expectedCheckoutId,
+            CancellationToken cancellationToken)
         {
             VerifyCalls++;
             return Task.FromResult(_verifyResult);
         }
 
-        public Task<PaymentGatewayResult> RefundPaymentIntentAsync(string? paymentIntentId, CancellationToken cancellationToken)
+        public Task<PaymentGatewayResult> RefundPaymentIntentAsync(
+            string? paymentIntentId,
+            string idempotencyKey,
+            CancellationToken cancellationToken)
         {
+            RefundCalls++;
             return Task.FromResult(new PaymentGatewayResult(true, false, string.Empty));
         }
     }

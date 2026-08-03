@@ -4,5 +4,7 @@ metadata:
   name: rfc-backend-config
 data:
   ASPNETCORE_URLS: "http://+:8080"
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+  AllowedHosts: "orders.example.com"
   Cors__AllowedOrigins: "https://orders.example.com"
   PublicAppUrl: "https://orders.example.com"

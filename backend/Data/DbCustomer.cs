@@ -9,6 +9,7 @@ public class DbCustomer
     public string Address { get; set; } = string.Empty;
     public string Postcode { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

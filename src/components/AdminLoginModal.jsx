@@ -5,8 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { adminLogin } from '../services/api';
 
 export default function AdminLoginModal({ isOpen, onClose, onSuccess }) {
-  const [email, setEmail] = useState('manager@rfcwatford.local');
-  const [password, setPassword] = useState('RfcWatford2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -18,8 +18,8 @@ export default function AdminLoginModal({ isOpen, onClose, onSuccess }) {
     try {
       const user = await adminLogin(email, password);
       onSuccess(user);
-      setEmail('manager@rfcwatford.local');
-      setPassword('RfcWatford2026!');
+      setEmail('');
+      setPassword('');
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -60,7 +60,7 @@ export default function AdminLoginModal({ isOpen, onClose, onSuccess }) {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   autoComplete="username"
-                  placeholder="manager@rfcwatford.local"
+                  placeholder="name@company.com"
                   required
                 />
               </div>

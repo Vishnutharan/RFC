@@ -25,7 +25,7 @@ public class OrderAccessServiceTests
     }
 
     [Fact]
-    public void HasAccess_AllowsAuthenticatedCustomerByEmailForLegacyOrders()
+    public void HasAccess_RejectsUnverifiedEmailMatchForLegacyOrders()
     {
         var service = CreateService();
         var order = new DbOrder
@@ -35,7 +35,7 @@ public class OrderAccessServiceTests
 
         var user = CustomerPrincipal("customer-2", "OWNER@example.com");
 
-        Assert.True(service.HasAccess(order, user, null));
+        Assert.False(service.HasAccess(order, user, null));
     }
 
     [Fact]

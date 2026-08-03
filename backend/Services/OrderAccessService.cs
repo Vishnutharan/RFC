@@ -32,11 +32,11 @@ public sealed class OrderAccessService
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    public static string? GetAccessToken(HttpRequest request, string? bodyToken = null)
+    public static string? GetAccessToken(HttpRequest request)
     {
-        var token = InputSanitizer.CleanNullable(bodyToken, 256)
-            ?? InputSanitizer.CleanNullable(request.Query["accessToken"].FirstOrDefault(), 256)
-            ?? InputSanitizer.CleanNullable(request.Headers[AccessTokenHeader].FirstOrDefault(), 256);
+        var token = InputSanitizer.CleanNullable(
+            request.Headers[AccessTokenHeader].FirstOrDefault(),
+            256);
 
         return string.IsNullOrWhiteSpace(token) ? null : token;
     }
@@ -105,8 +105,6 @@ public sealed class OrderAccessService
             return true;
         }
 
-        var customerEmail = user.FindFirstValue(ClaimTypes.Email);
-        return !string.IsNullOrWhiteSpace(customerEmail) &&
-               string.Equals(order.CustomerEmail, customerEmail, StringComparison.OrdinalIgnoreCase);
+        return false;
     }
 }

@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using RFC.Api.Data;
 using RFC.Api.Models;
 using RFC.Api.Security;
@@ -40,12 +42,22 @@ public class PaymentsController : ControllerBase
     public async Task<IActionResult> CreateIntent([FromBody] CreatePaymentIntentRequest request)
     {
         var secretKey = _configuration["Stripe:SecretKey"];
-        if (string.IsNullOrWhiteSpace(secretKey)) return ServiceUnavailable();
+        if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Contains("replace", StringComparison.OrdinalIgnoreCase))
+            return ServiceUnavailable();
 
         if (request.Order == null)
         {
             return BadRequest(new { message = "Order draft is required before card payment." });
         }
+
+        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(customerId)) return Unauthorized();
+        if (!Guid.TryParse(request.CheckoutId, out var checkoutGuid))
+        {
+            return BadRequest(new { message = "A valid checkout id is required." });
+        }
+
+        var checkoutId = checkoutGuid.ToString("N");
 
         try
         {
@@ -59,8 +71,7 @@ public class PaymentsController : ControllerBase
                 return BadRequest(new { message = pricingResult.Error });
             }
 
-            StripeConfiguration.ApiKey = secretKey;
-            var service = new PaymentIntentService();
+            var service = new PaymentIntentService(new StripeClient(secretKey));
             var pricedOrder = pricingResult.Order;
             var amountInPence = (long)Math.Round(pricedOrder.Total * 100m, MidpointRounding.AwayFromZero);
             var intent = await service.CreateAsync(new PaymentIntentCreateOptions
@@ -73,11 +84,14 @@ public class PaymentsController : ControllerBase
                 },
                 Metadata = new Dictionary<string, string>
                 {
-                    ["source"] = "rfc-watford-web",
-                    ["customer_email"] = pricedOrder.CustomerEmail,
-                    ["server_total"] = pricedOrder.Total.ToString("0.00")
+                    ["purpose"] = "rfc_order",
+                    ["customer_id"] = customerId,
+                    ["checkout_id"] = checkoutId
                 }
-            }, requestOptions: null, cancellationToken: HttpContext.RequestAborted);
+            }, new RequestOptions
+            {
+                IdempotencyKey = $"rfc-payment-intent:{customerId}:{checkoutId}"
+            }, HttpContext.RequestAborted);
 
             return Ok(new
             {
@@ -105,12 +119,28 @@ public class PaymentsController : ControllerBase
         try
         {
             using var reader = new StreamReader(HttpContext.Request.Body);
-            var json = await reader.ReadToEndAsync();
+            var json = await reader.ReadToEndAsync(HttpContext.RequestAborted);
             var signature = Request.Headers["Stripe-Signature"];
             var stripeEvent = EventUtility.ConstructEvent(json, signature, webhookSecret);
 
+            if (await _db.PaymentWebhookEvents.AsNoTracking().AnyAsync(
+                    item => item.Id == stripeEvent.Id,
+                    HttpContext.RequestAborted))
+            {
+                return Ok(new { received = true, duplicate = true });
+            }
+
+            var webhookEvent = new PaymentWebhookEvent
+            {
+                Id = stripeEvent.Id,
+                Type = stripeEvent.Type,
+                ReceivedAt = DateTime.UtcNow
+            };
+            _db.PaymentWebhookEvents.Add(webhookEvent);
+
             if (stripeEvent.Data.Object is PaymentIntent intent)
             {
+                webhookEvent.PaymentIntentId = intent.Id;
                 var order = await _db.Orders.FirstOrDefaultAsync(
                     item => item.StripePaymentIntentId == intent.Id,
                     HttpContext.RequestAborted);
@@ -118,16 +148,17 @@ public class PaymentsController : ControllerBase
                 {
                     if (stripeEvent.Type == "payment_intent.succeeded")
                     {
-                        order.PaymentStatus = "Paid";
+                        if (order.PaymentStatus is not "Refunded") order.PaymentStatus = "Paid";
                     }
-                    else if (stripeEvent.Type == "payment_intent.payment_failed")
+                    else if (stripeEvent.Type is "payment_intent.payment_failed" or "payment_intent.canceled")
                     {
-                        order.PaymentStatus = "Failed";
+                        if (order.PaymentStatus is "Pending" or "Authorized") order.PaymentStatus = "Failed";
                     }
-
-                    await _db.SaveChangesAsync(HttpContext.RequestAborted);
                 }
             }
+
+            webhookEvent.ProcessedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(HttpContext.RequestAborted);
 
             return Ok(new { received = true });
         }
@@ -164,5 +195,10 @@ public class PaymentsController : ControllerBase
 
 public sealed class CreatePaymentIntentRequest
 {
+    [Required]
+    [MaxLength(80)]
+    public string CheckoutId { get; set; } = string.Empty;
+
+    [Required]
     public Order? Order { get; set; }
 }

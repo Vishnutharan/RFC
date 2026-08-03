@@ -6,7 +6,8 @@ public static class PasswordHasher
 {
     private const int SaltSize = 16;
     private const int KeySize = 32;
-    private const int Iterations = 210_000;
+    private const int Iterations = 600_000;
+    private const int MaximumAcceptedIterations = 2_000_000;
 
     public static string Hash(string password)
     {
@@ -17,14 +18,42 @@ public static class PasswordHasher
 
     public static bool Verify(string password, string storedHash)
     {
+        try
+        {
+            var parts = storedHash.Split('$');
+            if (parts.Length != 4 || parts[0] != "pbkdf2-sha256") return false;
+
+            if (!int.TryParse(parts[1], out var iterations) ||
+                iterations < 100_000 ||
+                iterations > MaximumAcceptedIterations)
+            {
+                return false;
+            }
+
+            var salt = Convert.FromBase64String(parts[2]);
+            var expected = Convert.FromBase64String(parts[3]);
+            if (salt.Length != SaltSize || expected.Length != KeySize) return false;
+
+            var actual = Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                salt,
+                iterations,
+                HashAlgorithmName.SHA256,
+                expected.Length);
+
+            return CryptographicOperations.FixedTimeEquals(actual, expected);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    public static bool NeedsRehash(string storedHash)
+    {
         var parts = storedHash.Split('$');
-        if (parts.Length != 4 || parts[0] != "pbkdf2-sha256") return false;
-
-        if (!int.TryParse(parts[1], out var iterations)) return false;
-        var salt = Convert.FromBase64String(parts[2]);
-        var expected = Convert.FromBase64String(parts[3]);
-        var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expected.Length);
-
-        return CryptographicOperations.FixedTimeEquals(actual, expected);
+        return parts.Length != 4 ||
+               !int.TryParse(parts[1], out var iterations) ||
+               iterations < Iterations;
     }
 }

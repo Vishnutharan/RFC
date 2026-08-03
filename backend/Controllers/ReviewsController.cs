@@ -28,14 +28,24 @@ public class ReviewsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> Get()
+    public async Task<IActionResult> Get([FromQuery] int limit = 30)
     {
         if (_db == null) return ServiceUnavailable();
 
         try
         {
             var reviews = await _db.Reviews.AsNoTracking()
+                .Where(review => review.Type == "Review" && review.Status == "Published")
                 .OrderByDescending(r => r.Date)
+                .Take(Math.Clamp(limit, 1, 100))
+                .Select(review => new PublicReviewDto(
+                    review.Id,
+                    review.CustomerName,
+                    review.Rating,
+                    review.Category,
+                    review.Comment,
+                    review.Response,
+                    review.Date))
                 .ToListAsync(HttpContext.RequestAborted);
             return Ok(reviews);
         }
@@ -65,17 +75,41 @@ public class ReviewsController : ControllerBase
                 Category = InputSanitizer.Clean(request.Category, 80),
                 Comment = InputSanitizer.Clean(request.Comment, 2000),
                 OrderNumber = InputSanitizer.CleanNullable(request.OrderNumber, 30),
-                Status = request.Type == "Complaint" ? "Pending" : "Published",
+                Status = "Pending",
                 Date = DateTime.UtcNow
             };
 
             _db.Reviews.Add(review);
             await _db.SaveChangesAsync(HttpContext.RequestAborted);
-            return Ok(review);
+            return Accepted(new { review.Id, review.Status });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to persist feedback.");
+            return ServiceUnavailable();
+        }
+    }
+
+    [Authorize(Policy = "StaffOnly")]
+    [HttpGet("moderation")]
+    public async Task<IActionResult> GetForModeration([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    {
+        if (_db == null) return ServiceUnavailable();
+
+        try
+        {
+            var safePage = Math.Max(1, page);
+            var safePageSize = Math.Clamp(pageSize, 1, 100);
+            var feedback = await _db.Reviews.AsNoTracking()
+                .OrderByDescending(review => review.Date)
+                .Skip((safePage - 1) * safePageSize)
+                .Take(safePageSize)
+                .ToListAsync(HttpContext.RequestAborted);
+            return Ok(feedback);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load feedback moderation queue.");
             return ServiceUnavailable();
         }
     }
@@ -117,3 +151,12 @@ public class ReviewsController : ControllerBase
         return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ServiceUnavailableMessage });
     }
 }
+
+public sealed record PublicReviewDto(
+    string Id,
+    string CustomerName,
+    int Rating,
+    string Category,
+    string Comment,
+    string? Response,
+    DateTime Date);

@@ -75,6 +75,55 @@ public class AdminControllerTests
         Assert.Equal("Cancelled", order.OrderStatus);
     }
 
+    [Fact]
+    public async Task UpdateStatus_RejectsGenericCancellationWorkflow()
+    {
+        var fixture = CreateFixture("Placed");
+
+        var result = await fixture.Controller.UpdateStatus("order-1", new UpdateOrderStatusDto { Status = "Cancelled" });
+
+        Assert.IsType<ConflictObjectResult>(result);
+        var order = await fixture.Db.Orders.SingleAsync();
+        Assert.Equal("Placed", order.OrderStatus);
+    }
+
+    [Fact]
+    public async Task UpdateStoreSetting_RejectsIncompleteOpeningHours()
+    {
+        var fixture = CreateFixture("Placed");
+
+        var result = await fixture.Controller.UpdateStoreSetting(
+            "OpeningHours",
+            new AdminStoreSettingRequest { Value = "{}" });
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.False(await fixture.Db.StoreSettings.AnyAsync());
+    }
+
+    [Fact]
+    public async Task UpdateStoreSetting_AcceptsCompleteOpeningHours()
+    {
+        var fixture = CreateFixture("Placed");
+        const string openingHours = """
+            {
+              "Monday":{"open":"11:00","close":"23:00"},
+              "Tuesday":{"open":"11:00","close":"23:00"},
+              "Wednesday":{"open":"11:00","close":"23:00"},
+              "Thursday":{"open":"11:00","close":"23:00"},
+              "Friday":{"open":"11:00","close":"23:30"},
+              "Saturday":{"open":"11:00","close":"23:30"},
+              "Sunday":{"open":"12:00","close":"22:30"}
+            }
+            """;
+
+        var result = await fixture.Controller.UpdateStoreSetting(
+            "OpeningHours",
+            new AdminStoreSettingRequest { Value = openingHours });
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(openingHours, (await fixture.Db.StoreSettings.SingleAsync()).Value);
+    }
+
     private static AdminFixture CreateFixture(string currentStatus)
     {
         var services = new ServiceCollection();

@@ -108,6 +108,9 @@ public class Order
     [MaxLength(200)]
     public string? StripePaymentIntentId { get; set; }
 
+    [MaxLength(80)]
+    public string? CheckoutId { get; set; }
+
     public decimal? DeliveryLat { get; set; }
     public decimal? DeliveryLng { get; set; }
     public int? EtaMinutes { get; set; }
@@ -135,7 +138,4 @@ public class CancelOrderRequest
     [MinLength(3)]
     [MaxLength(500)]
     public string Reason { get; set; } = string.Empty;
-
-    [MaxLength(256)]
-    public string? AccessToken { get; set; }
 }

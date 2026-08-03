@@ -1,8 +1,9 @@
 namespace RFC.Api.Services;
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
-public sealed class DeliveryRadiusService
+public sealed partial class DeliveryRadiusService
 {
     private const decimal MaxRadiusKm = 5.0m;
     private const double StoreLat = 51.682366d;
@@ -10,24 +11,6 @@ public sealed class DeliveryRadiusService
 
     private readonly HttpClient? _httpClient;
     private readonly ILogger<DeliveryRadiusService>? _logger;
-
-    private static readonly IReadOnlyDictionary<string, decimal> PostcodeDistances =
-        new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["WD17"] = 0.2m,
-            ["WD24"] = 2.2m,
-            ["WD18"] = 3.4m,
-            ["WD25"] = 4.8m,
-            ["WD19"] = 5.0m,
-            ["WD3"] = 6.8m,
-            ["WD4"] = 7.4m,
-            ["WD5"] = 6.1m,
-            ["WD6"] = 10.5m,
-            ["WD7"] = 9.8m,
-            ["HA5"] = 7.5m,
-            ["HA6"] = 8.2m,
-            ["AL2"] = 11.0m
-        };
 
     public DeliveryRadiusService()
     {
@@ -45,7 +28,7 @@ public sealed class DeliveryRadiusService
         if (validation != null) return validation;
 
         var clean = NormalizePostcode(postcode);
-        if (_httpClient == null) return EstimateByOutwardCode(clean);
+        if (_httpClient == null) return Unavailable();
 
         try
         {
@@ -60,7 +43,7 @@ public sealed class DeliveryRadiusService
 
             if (!response.IsSuccessStatusCode)
             {
-                return EstimateByOutwardCode(clean);
+                return Unavailable();
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -70,19 +53,13 @@ public sealed class DeliveryRadiusService
             var lng = result.GetProperty("longitude").GetDouble();
             var distanceKm = Math.Round(CalculateDistanceKm(StoreLat, StoreLng, lat, lng), 1);
 
-            return BuildResult((decimal)distanceKm, liveChecked: true);
+            return BuildResult((decimal)distanceKm);
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Live postcode radius check failed for {Postcode}. Falling back to outward-code estimate.", clean);
-            return EstimateByOutwardCode(clean);
+            _logger?.LogWarning(ex, "Live postcode radius check failed for {Postcode}; delivery validation is failing closed.", clean);
+            return Unavailable();
         }
-    }
-
-    public DeliveryCheck Check(string? postcode)
-    {
-        var validation = ValidatePostcode(postcode);
-        return validation ?? EstimateByOutwardCode(NormalizePostcode(postcode));
     }
 
     private static DeliveryCheck? ValidatePostcode(string? postcode)
@@ -93,30 +70,29 @@ public sealed class DeliveryRadiusService
         }
 
         var clean = NormalizePostcode(postcode);
-        if (clean.Length < 3)
+        if (!UkPostcodeRegex().IsMatch(clean))
         {
-            return new DeliveryCheck(false, 0, MaxRadiusKm, "Please enter a complete postcode.");
+            return new DeliveryCheck(false, 0, MaxRadiusKm, "Please enter a valid UK postcode.");
         }
 
         return null;
     }
 
-    private static DeliveryCheck EstimateByOutwardCode(string clean)
+    private static DeliveryCheck BuildResult(decimal distanceKm)
     {
-        var outward = clean.Length <= 4 ? clean : clean[..^3];
-        var distanceKm = PostcodeDistances.TryGetValue(outward, out var known)
-            ? known
-            : clean.StartsWith("WD", StringComparison.OrdinalIgnoreCase) ? 5.8m : 12.5m;
-
-        return BuildResult(distanceKm, liveChecked: false);
+        return distanceKm <= MaxRadiusKm
+            ? new DeliveryCheck(true, distanceKm, MaxRadiusKm, $"{distanceKm:0.0} km from 119 Courtlands Dr - inside our 5 km delivery radius.")
+            : new DeliveryCheck(false, distanceKm, MaxRadiusKm, $"Your address is about {distanceKm:0.0} km from 119 Courtlands Dr, outside our 5 km delivery radius. Please select Store Collection.");
     }
 
-    private static DeliveryCheck BuildResult(decimal distanceKm, bool liveChecked)
+    private static DeliveryCheck Unavailable()
     {
-        var suffix = liveChecked ? "" : " Estimated from postcode area.";
-        return distanceKm <= MaxRadiusKm
-            ? new DeliveryCheck(true, distanceKm, MaxRadiusKm, $"{distanceKm:0.0} km from 119 Courtlands Dr - inside our 5 km delivery radius.{suffix}")
-            : new DeliveryCheck(false, distanceKm, MaxRadiusKm, $"Your address is about {distanceKm:0.0} km from 119 Courtlands Dr, outside our 5 km delivery radius. Please select Store Collection.{suffix}");
+        return new DeliveryCheck(
+            false,
+            0,
+            MaxRadiusKm,
+            "Delivery postcode validation is temporarily unavailable. Please try again shortly or select Store Collection.",
+            IsServiceUnavailable: true);
     }
 
     private static string NormalizePostcode(string? postcode)
@@ -137,6 +113,14 @@ public sealed class DeliveryRadiusService
     }
 
     private static double ToRadians(double degrees) => degrees * Math.PI / 180d;
+
+    [GeneratedRegex("^(?:GIR0AA|[A-Z]{1,2}[0-9][A-Z0-9]?[0-9][A-Z]{2})$", RegexOptions.IgnoreCase)]
+    private static partial Regex UkPostcodeRegex();
 }
 
-public sealed record DeliveryCheck(bool IsEligible, decimal DistanceKm, decimal MaxRadiusKm, string Reason);
+public sealed record DeliveryCheck(
+    bool IsEligible,
+    decimal DistanceKm,
+    decimal MaxRadiusKm,
+    string Reason,
+    bool IsServiceUnavailable = false);
