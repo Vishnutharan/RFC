@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame, Shield } from 'lucide-react';
+import { Menu, Search, ShoppingBag, Store, Truck, User, X, Flame, ShieldCheck } from 'lucide-react';
 
 const navLinks = [
   { label: 'Menu', href: '#menu' },
@@ -45,7 +45,7 @@ export default function Header({
     return undefined;
   }, [cartCount]);
 
-  const staffLabel = isAdminView ? 'Back to Store' : adminUser ? 'Staff Dashboard' : 'Staff Login';
+  const adminLabel = isAdminView ? 'Back to Store' : adminUser ? 'Admin Dashboard' : 'Admin Login';
 
   return (
     <header className={`header-container ${scrolled ? 'header-scrolled' : ''}`}>
@@ -56,8 +56,8 @@ export default function Header({
           </span>
         </div>
         <button className="staff-panel-btn" type="button" onClick={onStaffPanelClick}>
-          <Shield size={13} style={{ marginRight: 4 }} />
-          {staffLabel}
+          <ShieldCheck size={14} style={{ marginRight: 4 }} />
+          {adminLabel}
         </button>
       </div>
 
@@ -140,10 +140,10 @@ export default function Header({
                   className="account-btn"
                   type="button"
                   onClick={onStaffPanelClick}
-                  style={{ background: 'var(--red-light)', color: 'var(--red)', borderColor: 'var(--red-glow)' }}
+                  style={{ background: 'var(--red-light)', color: 'var(--red)', borderColor: 'var(--red-glow)', fontWeight: 800 }}
                 >
-                  <Shield size={18} />
-                  <span className="account-btn-label">{staffLabel}</span>
+                  <ShieldCheck size={18} />
+                  <span className="account-btn-label">{adminLabel}</span>
                 </button>
               </>
             )}
@@ -155,7 +155,7 @@ export default function Header({
                 onClick={onStaffPanelClick}
                 style={{ padding: '8px 16px', fontSize: '0.85rem' }}
               >
-                Exit Staff Mode
+                Exit Admin Mode
               </button>
             )}
 
@@ -197,8 +197,8 @@ export default function Header({
                 onStaffPanelClick();
               }}
             >
-              <Shield size={18} style={{ marginRight: 6 }} />
-              {staffLabel}
+              <ShieldCheck size={18} style={{ marginRight: 6 }} />
+              {adminLabel}
             </button>
           </nav>
         </div>
