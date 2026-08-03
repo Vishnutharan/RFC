@@ -126,6 +126,67 @@ export const getAdminOrders = async () => {
   return requestJson('/admin/orders');
 };
 
+export const getAdminMenu = async () => {
+  return requestJson('/admin/menu');
+};
+
+export const createAdminMenuItem = async (menuItem) => {
+  return requestJson('/admin/menu', {
+    method: 'POST',
+    body: JSON.stringify(menuItem)
+  });
+};
+
+export const updateAdminMenuItem = async (menuItemId, menuItem) => {
+  return requestJson(`/admin/menu/${encodeURIComponent(menuItemId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(menuItem)
+  });
+};
+
+export const archiveAdminMenuItem = async (menuItemId) => {
+  return requestJson(`/admin/menu/${encodeURIComponent(menuItemId)}`, {
+    method: 'DELETE'
+  });
+};
+
+export const getAdminCustomers = async () => {
+  return requestJson('/admin/customers');
+};
+
+export const getAdminStaff = async () => {
+  return requestJson('/admin/staff');
+};
+
+export const createAdminStaff = async (staffUser) => {
+  return requestJson('/admin/staff', {
+    method: 'POST',
+    body: JSON.stringify(staffUser)
+  });
+};
+
+export const updateAdminStaff = async (staffUserId, staffUser) => {
+  return requestJson(`/admin/staff/${encodeURIComponent(staffUserId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(staffUser)
+  });
+};
+
+export const getAdminAuditLogs = async () => {
+  return requestJson('/admin/audit');
+};
+
+export const getAdminSettings = async () => {
+  return requestJson('/admin/settings');
+};
+
+export const updateAdminSetting = async (key, value) => {
+  return requestJson(`/admin/settings/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value })
+  });
+};
+
 export const updateOrderStatus = async (orderId, newStatus) => {
   return requestJson(`/admin/orders/${encodeURIComponent(orderId)}/status`, {
     method: 'PUT',

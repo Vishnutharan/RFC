@@ -4,8 +4,8 @@ namespace RFC.Api.Services;
 
 public sealed class GoogleMapsService
 {
-    private const decimal StoreLat = 51.6742m;
-    private const decimal StoreLng = -0.4085m;
+    private const decimal StoreLat = 51.682366m;
+    private const decimal StoreLng = -0.41867m;
 
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;

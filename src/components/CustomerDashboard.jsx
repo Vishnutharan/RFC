@@ -1,505 +1,492 @@
-import { useEffect, useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
-import { Check, Edit3, Gift, Home, LogOut, Mail, MapPin, MessageSquare, Phone, Printer, RotateCcw, Save, Search, ShoppingBag, Sparkles, Tag, User, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
-import { deleteCurrentCustomer } from '../services/api';
-import { getCurrentUser, loginCustomer, logoutCustomer, registerCustomer, updateCustomerProfile } from '../services/customerAuth';
-
-const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
-const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
-
-const tabs = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'orders', label: 'Orders', icon: ShoppingBag },
-  { id: 'profile', label: 'Account', icon: User },
-  { id: 'reviews', label: 'Reviews', icon: MessageSquare }
-];
+import { getCurrentUser, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
 
 export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, showToast }) {
-  const [activeTab, setActiveTab] = useState('home');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('orders');
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [authMode, setAuthMode] = useState('none');
-  const [authError, setAuthError] = useState('');
+
+  // Profile Edit State
   const [profileForm, setProfileForm] = useState({ name: '', phone: '', email: '', address: '', postcode: '' });
-  const [authForm, setAuthForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    phone: '',
-    address: '',
-    postcode: '',
-    consentAccepted: false
-  });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  // Auth Mode State
+  const [authMode, setAuthMode] = useState('none'); // 'none', 'login', 'register'
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', address: '', postcode: '' });
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    let isActive = true;
-
     if (isOpen) {
-      getCurrentUser()
-        .then((user) => {
-          if (!isActive) return;
-          setCurrentUser(user);
-          setAuthMode(user ? 'none' : 'login');
-          setProfileForm({
-            name: user?.name || '',
-            phone: user?.phone || '',
-            email: user?.email || '',
-            address: user?.address || '',
-            postcode: user?.postcode || ''
-          });
-        })
-        .catch(() => {
-          if (!isActive) return;
-          setCurrentUser(null);
-          setAuthMode('login');
-        });
+      const u = getCurrentUser();
+      setCurrentUser(u);
+      setProfileForm({
+        name: u.name || '',
+        phone: u.phone || '',
+        email: u.email || '',
+        address: u.address || '',
+        postcode: u.postcode || ''
+      });
     }
-
-    return () => {
-      isActive = false;
-    };
   }, [isOpen]);
-
-  const loyaltyCount = (orders.length % 8) || Math.min(7, orders.length);
-  const ordersNeeded = Math.max(1, 8 - loyaltyCount);
-  const recentOrders = useMemo(() => orders.slice(0, 4), [orders]);
 
   if (!isOpen) return null;
 
-  const handleAuthSubmit = async (event) => {
-    event.preventDefault();
+  const handleSaveProfile = (e) => {
+    e.preventDefault();
+    const updated = updateCustomerProfile(profileForm);
+    setCurrentUser(updated);
+    setIsEditingProfile(false);
+    if (showToast) showToast('Profile and address saved successfully! ✨');
+  };
+
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
     setAuthError('');
 
-    try {
-      if (authMode === 'login') {
-        const result = await loginCustomer(authForm.email, authForm.password);
-        setCurrentUser(result.user);
-        setProfileForm({
-          name: result.user.name || '',
-          phone: result.user.phone || '',
-          email: result.user.email || '',
-          address: result.user.address || '',
-          postcode: result.user.postcode || ''
-        });
+    if (authMode === 'login') {
+      const res = loginCustomer(authForm.email, authForm.password);
+      if (res.success) {
+        setCurrentUser(res.user);
         setAuthMode('none');
-        showToast?.(`Welcome back, ${result.user.name}.`);
+        if (showToast) showToast(`Welcome back, ${res.user.name}! 🎉`);
       } else {
-        if (!authForm.consentAccepted) {
-          setAuthError('Please accept the Privacy Policy and Terms.');
-          return;
-        }
-        const user = await registerCustomer(authForm);
-        setCurrentUser(user);
-        setProfileForm({
-          name: user.name || '',
-          phone: user.phone || '',
-          email: user.email || '',
-          address: user.address || '',
-          postcode: user.postcode || ''
-        });
-        setAuthMode('none');
-        showToast?.(`Account created. Welcome ${user.name}.`);
+        setAuthError(res.message);
       }
-    } catch (error) {
-      setAuthError(error.message || 'Account request failed.');
+    } else if (authMode === 'register') {
+      if (!authForm.name || !authForm.email || !authForm.password) {
+        setAuthError('Please enter your Name, Email, and Password');
+        return;
+      }
+      const user = registerCustomer(authForm);
+      setCurrentUser(user);
+      setAuthMode('none');
+      if (showToast) showToast(`Account created! Welcome, ${user.name} 🎉`);
     }
   };
 
-  const handleSaveProfile = async (event) => {
-    event.preventDefault();
-    try {
-      const updated = await updateCustomerProfile(profileForm);
-      setCurrentUser(updated);
-      setIsEditingProfile(false);
-      showToast?.('Profile details updated.');
-    } catch (error) {
-      showToast?.(error.message || 'Profile could not be updated.', 'error');
-    }
+  const handleLogout = () => {
+    logoutCustomer();
+    const guest = getCurrentUser();
+    setCurrentUser(guest);
+    if (showToast) showToast('Logged out of customer account.');
   };
 
-  const handleLogout = async () => {
-    await logoutCustomer();
-    setCurrentUser(null);
-    setAuthMode('login');
-    setIsEditingProfile(false);
-    showToast?.('Logged out.', 'info');
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Delete your RFC account and anonymise retained order records?')) return;
-    try {
-      await deleteCurrentCustomer();
-      setCurrentUser(null);
-      setAuthMode('login');
-      showToast?.('Account deleted and order records anonymised.', 'info');
-    } catch (error) {
-      showToast?.(error.message || 'Account could not be deleted.', 'error');
-    }
-  };
+  const loyaltyCount = (orders.length % 8) || 7;
+  const ordersNeeded = 8 - loyaltyCount;
+  const loyaltyPercent = Math.min(100, Math.round((loyaltyCount / 8) * 100));
 
   return (
-    <AnimatePresence>
-      <motion.div className="modal-overlay" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-        <motion.div
-          className="modal-card customer-dashboard-card"
-          onClick={(event) => event.stopPropagation()}
-          initial={{ opacity: 0, y: 26 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 26 }}
-        >
-          <div className="modal-header">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-card" style={{ maxWidth: '820px', borderRadius: 'var(--radius-lg)' }} onClick={(e) => e.stopPropagation()}>
+        
+        {/* User Hero Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 100%)',
+          padding: '24px 28px', borderBottom: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--red), var(--amber))',
+              color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 900, fontSize: '1.4rem', boxShadow: 'var(--shadow-red)'
+            }}>
+              {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+            </div>
             <div>
-              <h3>{currentUser ? `Good evening, ${currentUser.name?.split(' ')[0] || 'friend'}` : 'Your RFC Account'}</h3>
-              <p className="modal-subtitle">
-                {currentUser ? 'Rainy night? Comfort food incoming.' : 'Login to reorder favourites and save delivery details.'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.35rem', fontWeight: 900, color: 'var(--text)' }}>
+                  {currentUser?.name || 'Customer Account'}
+                </h3>
+                <span className="card-badge badge-bestseller" style={{ fontSize: '0.65rem' }}>⭐ VIP Member</span>
+              </div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '2px' }}>
+                📍 {currentUser?.address || '37 Berry Avenue'}, {currentUser?.postcode || 'WD24 6RU'} • {currentUser?.phone || '+44 7123 456789'}
               </p>
             </div>
-            <button className="close-btn" type="button" onClick={onClose} aria-label="Close account">
-              <X size={18} />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}
+              className="btn-add-item"
+              style={{ padding: '8px 14px', fontSize: '0.82rem' }}
+            >
+              <User size={15} /> {authMode !== 'none' ? '← Back to Account' : 'Switch Account / Login'}
             </button>
+            <button className="close-btn" onClick={onClose}><X size={20} /></button>
           </div>
+        </div>
 
-          <div className="dashboard-tabs" style={{ padding: '16px 20px 0' }}>
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`dashboard-tab ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <Icon size={16} /> {tab.label}
-                </button>
-              );
-            })}
-            {currentUser ? (
-              <button className="dashboard-tab" type="button" onClick={handleLogout}>
-                <LogOut size={16} /> Logout
+        {/* Tab Navigation */}
+        <div style={{
+          display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px',
+          background: '#FFF', gap: '4px', overflowX: 'auto', scrollbarWidth: 'none'
+        }}>
+          {[
+            { id: 'orders', label: 'My Orders', icon: ShoppingBag, count: orders.length },
+            { id: 'profile', label: 'My Info & Address', icon: Edit3, count: '' },
+            { id: 'loyalty', label: 'Loyalty Rewards', icon: Gift, count: `${loyaltyCount}/8` },
+            { id: 'vouchers', label: 'My Vouchers', icon: Tag, count: '3' },
+            { id: 'reviews', label: 'Reviews & Feedback', icon: MessageSquare, count: '' },
+          ].map(t => {
+            const Icon = t.icon;
+            const isActive = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => { setActiveTab(t.id); setAuthMode('none'); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 14px',
+                  borderBottom: isActive ? '3px solid var(--red)' : '3px solid transparent',
+                  fontWeight: isActive ? 800 : 600, color: isActive ? 'var(--red)' : 'var(--text2)',
+                  fontSize: '0.86rem', background: 'none', cursor: 'pointer', whiteSpace: 'nowrap'
+                }}
+              >
+                <Icon size={16} />
+                <span>{t.label}</span>
+                {t.count && <span className="cat-badge" style={{ background: isActive ? 'var(--red-light)' : 'var(--surface-alt)', color: isActive ? 'var(--red)' : 'var(--text2)' }}>{t.count}</span>}
               </button>
-            ) : (
-              <button className="dashboard-tab" type="button" onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}>
-                <User size={16} /> Login
-              </button>
+            );
+          })}
+        </div>
+
+        {/* AUTH FORM MODAL VIEW */}
+        {authMode !== 'none' ? (
+          <div className="modal-body" style={{ padding: '30px' }}>
+            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 900, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Lock size={20} color="var(--red)" />
+              {authMode === 'login' ? 'Sign In to Your Account' : 'Create New Customer Account'}
+            </h4>
+
+            {authError && (
+              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--red-light)', border: '1px solid #FEE2E2', color: 'var(--red)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '14px' }}>
+                ⚠️ {authError}
+              </div>
             )}
+
+            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {authMode === 'register' && (
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Full Name</label>
+                  <div className="input-group"><User size={16} /><input placeholder="Full Name (e.g. Vishnu Karun)" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required /></div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Email Address</label>
+                <div className="input-group"><Mail size={16} /><input type="email" placeholder="email@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required /></div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Password</label>
+                <div className="input-group"><Lock size={16} /><input type="password" placeholder="••••••••" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} required /></div>
+              </div>
+
+              {authMode === 'register' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Phone Number</label>
+                    <div className="input-group"><Phone size={16} /><input placeholder="+44 7123 456789" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} /></div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Street Address</label>
+                    <div className="input-group"><MapPin size={16} /><input placeholder="37 Berry Avenue" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} /></div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Postcode</label>
+                    <div className="input-group"><MapPin size={16} /><input placeholder="WD24 6RU" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value })} /></div>
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                <button type="submit" className="btn-submit-modal" style={{ flex: 1 }}>
+                  {authMode === 'login' ? 'Sign In Now' : 'Create Account'}
+                </button>
+                <button type="button" className="mode-btn" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} style={{ border: '1px solid var(--border)' }}>
+                  {authMode === 'login' ? 'Need an account? Register' : 'Existing customer? Sign In'}
+                </button>
+              </div>
+            </form>
           </div>
+        ) : (
+          /* MAIN ACCOUNT TABS VIEW */
+          <div className="modal-body" style={{ minHeight: '360px', maxHeight: '60vh', overflowY: 'auto', padding: '24px' }}>
+            
+            {/* 1. MY ORDERS TAB */}
+            {activeTab === 'orders' && (
+              <div>
+                {orders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text3)' }}>
+                    <ShoppingBag size={54} strokeWidth={1} style={{ marginBottom: '12px', color: 'var(--red)' }} />
+                    <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 800, color: 'var(--text)' }}>No Orders Placed Yet</h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '4px' }}>Order your favourite RFC crispy chicken to earn loyalty points!</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {orders.map((ord, i) => {
+                      const canCancel = ord.orderStatus === 'Placed' || ord.orderStatus === 'Preparing';
+                      return (
+                        <div key={ord.id || i} style={{
+                          background: '#FFF', borderRadius: 'var(--radius)', padding: '20px',
+                          border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
+                          display: 'flex', flexDirection: 'column', gap: '12px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontWeight: 900, fontSize: '1.05rem', fontFamily: 'var(--font-head)' }}>Order #{ord.orderNumber}</span>
+                                <span className={`status-badge status-${(ord.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>
+                                  {ord.orderStatus || 'Completed'}
+                                </span>
+                              </div>
+                              <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginTop: '2px', fontWeight: 600 }}>
+                                🕒 {ord.orderTime || (ord.createdAt ? new Date(ord.createdAt).toLocaleString('en-GB') : 'Today')}
+                              </p>
+                            </div>
+                            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.25rem', color: 'var(--red)' }}>
+                              £{ord.total?.toFixed(2) || '0.00'}
+                            </span>
+                          </div>
 
-          <div className="modal-body customer-portal-body">
-            {authMode !== 'none' ? (
-              <AuthPanel
-                authMode={authMode}
-                authForm={authForm}
-                authError={authError}
-                setAuthMode={setAuthMode}
-                setAuthForm={setAuthForm}
-                onSubmit={handleAuthSubmit}
-              />
-            ) : (
-              <>
-                {activeTab === 'home' && (
-                  <div className="for-you-grid">
-                    <section className="dashboard-card">
-                      <h4>Because you loved the Peri-Peri</h4>
-                      <div className="recommendation-rail">
-                        {['Peri-Peri Wings', 'Club Max Burger', 'Boneless Banquet', 'Chilli Cheese Bites', 'Apple Pie'].map((name, index) => (
-                          <article key={name} className="recommendation-card" style={{ animationDelay: `${index * 80}ms` }}>
-                            <h4>{name}</h4>
-                            <p className="cart-line-meta">Chef-picked for tonight</p>
-                          </article>
-                        ))}
-                      </div>
-                    </section>
+                          {/* Food Items Breakdown */}
+                          <div style={{ background: 'var(--surface-alt)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                            {ord.items && ord.items.map((it, idx) => (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: 'var(--text2)', padding: '2px 0' }}>
+                                <span>{it.quantity}x {it.name}</span>
+                                <span style={{ fontWeight: 700 }}>£{(it.price * it.quantity).toFixed(2)}</span>
+                              </div>
+                            ))}
+                            {ord.cancellationReason && (
+                              <p style={{ color: 'var(--red)', fontSize: '0.8rem', marginTop: '6px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <AlertTriangle size={14} /> Cancelled: {ord.cancellationReason}
+                              </p>
+                            )}
+                          </div>
 
-                    <aside className="dashboard-card">
-                      <div className="promo-countdown">
-                        <Sparkles size={20} />
-                        <p>Direct order deal ends in</p>
-                        <strong>02:14:33</strong>
-                      </div>
-                      <h4 style={{ marginTop: 16 }}>Loyalty progress</h4>
-                      <div className="card-meta">
-                        {Array.from({ length: 8 }).map((_, index) => (
-                          <span key={index} className={index < loyaltyCount ? 'gold-text' : ''}>
-                            {index < loyaltyCount ? <Check size={13} /> : index + 1}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="cart-line-meta">Just {ordersNeeded} more order{ordersNeeded === 1 ? '' : 's'} until your next reward.</p>
-                    </aside>
+                          {/* Order Actions */}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap', paddingTop: '4px' }}>
+                            {canCancel && (
+                              <button
+                                onClick={() => setCancelModalOrder(ord)}
+                                style={{
+                                  padding: '7px 14px', borderRadius: 'var(--radius-full)',
+                                  background: '#FEF2F2', color: 'var(--red)', border: '1px solid #FEE2E2',
+                                  fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer'
+                                }}
+                              >
+                                Cancel Order
+                              </button>
+                            )}
 
-                    <section className="dashboard-card" style={{ gridColumn: '1 / -1' }}>
-                      <h4>Order again</h4>
-                      {recentOrders.length === 0 ? (
-                        <p className="cart-line-meta">Your repeat-order shortcuts will appear here after checkout.</p>
-                      ) : (
-                        <div className="order-again-rail">
-                          {recentOrders.map((order, index) => (
-                            <OrderAgainCard
-                              key={order.id || order.orderNumber || index}
-                              order={order}
-                              onReorder={onReorder}
-                              onPrintReceipt={onPrintReceipt}
-                            />
-                          ))}
+                            <button
+                              onClick={() => onPrintReceipt(ord)}
+                              className="mode-btn"
+                              style={{ border: '1px solid var(--border)', padding: '6px 14px', fontSize: '0.8rem' }}
+                            >
+                              <Printer size={14} /> Print Receipt
+                            </button>
+
+                            <button
+                              onClick={() => onReorder(ord)}
+                              className="btn-add-item"
+                              style={{ padding: '6px 16px', fontSize: '0.8rem' }}
+                            >
+                              <RotateCcw size={14} /> Reorder
+                            </button>
+                          </div>
                         </div>
-                      )}
-                    </section>
+                      );
+                    })}
                   </div>
                 )}
-
-                {activeTab === 'orders' && (
-                  <OrdersPanel
-                    orders={orders}
-                    onReorder={onReorder}
-                    onPrintReceipt={onPrintReceipt}
-                    onCancel={(orderToCancel) => setCancelModalOrder(orderToCancel)}
-                  />
-                )}
-
-                {activeTab === 'profile' && (
-                  <ProfilePanel
-                    currentUser={currentUser}
-                    profileForm={profileForm}
-                    setProfileForm={setProfileForm}
-                    isEditingProfile={isEditingProfile}
-                    setIsEditingProfile={setIsEditingProfile}
-                    onSave={handleSaveProfile}
-                    onDelete={handleDeleteAccount}
-                  />
-                )}
-
-                {activeTab === 'reviews' && <ReviewsManager isAdmin={false} showToast={showToast} />}
-              </>
+              </div>
             )}
-          </div>
 
-          <div className="modal-footer">
-            <button className="btn-back" type="button" onClick={onClose}>Close</button>
-          </div>
-        </motion.div>
-
-        <CancelOrderModal
-          isOpen={Boolean(cancelModalOrder)}
-          onClose={() => setCancelModalOrder(null)}
-          order={cancelModalOrder}
-          onConfirmCancel={(orderId, reason) => {
-            onCancelOrder?.(orderId, reason);
-            setCancelModalOrder(null);
-          }}
-        />
-      </motion.div>
-    </AnimatePresence>
-  );
-}
-
-function AuthPanel({ authMode, authForm, authError, setAuthMode, setAuthForm, onSubmit }) {
-  return (
-    <form className="dashboard-card" onSubmit={onSubmit}>
-      <h4>{authMode === 'login' ? 'Login to customer account' : 'Create customer account'}</h4>
-      {authError && <p className="form-error">{authError}</p>}
-
-      {authMode === 'register' && (
-        <label className="input-group">
-          <User size={16} />
-          <input placeholder="Full name" value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} required />
-        </label>
-      )}
-      <label className="input-group">
-        <Mail size={16} />
-        <input type="email" placeholder="Email" value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} required />
-      </label>
-      <label className="input-group">
-        <User size={16} />
-        <input type="password" placeholder="Password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} required />
-      </label>
-
-      {authMode === 'register' && (
-        <>
-          <label className="input-group">
-            <Phone size={16} />
-            <input placeholder="Phone" value={authForm.phone} onChange={(event) => setAuthForm({ ...authForm, phone: event.target.value })} />
-          </label>
-          <label className="input-group">
-            <MapPin size={16} />
-            <input placeholder="Street address" value={authForm.address} onChange={(event) => setAuthForm({ ...authForm, address: event.target.value })} />
-          </label>
-          <label className="input-group">
-            <MapPin size={16} />
-            <input placeholder="Postcode" value={authForm.postcode} onChange={(event) => setAuthForm({ ...authForm, postcode: event.target.value.toUpperCase() })} />
-          </label>
-          <label className="consent-row">
-            <input type="checkbox" checked={authForm.consentAccepted} onChange={(event) => setAuthForm({ ...authForm, consentAccepted: event.target.checked })} />
-            <span>I agree to the Privacy Policy and Terms.</span>
-          </label>
-        </>
-      )}
-
-      <div className="modal-footer" style={{ paddingLeft: 0, paddingRight: 0, paddingBottom: 0 }}>
-        <button className="btn-submit-modal" type="submit">{authMode === 'login' ? 'Login' : 'Create account'}</button>
-        <button className="btn-back" type="button" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
-          {authMode === 'login' ? 'Register' : 'Login'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function OrderAgainCard({ order, onReorder, onPrintReceipt }) {
-  return (
-    <article className="order-again-card">
-      <div className="order-collage">RFC</div>
-      <h4>Order #{order.orderNumber || 'recent'}</h4>
-      <p className="cart-line-meta">{order.items?.slice(0, 3).map(getOrderItemName).join(', ') || 'RFC favourites'}</p>
-      <div className="modal-footer" style={{ padding: '12px 0 0' }}>
-        <button className="btn-add-item compact" type="button" onClick={() => onReorder(order)}>
-          <RotateCcw size={14} /> Reorder
-        </button>
-        <button className="btn-back" type="button" onClick={() => onPrintReceipt(order)}>
-          <Printer size={14} />
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function OrdersPanel({ orders, onReorder, onPrintReceipt, onCancel }) {
-  if (orders.length === 0) {
-    return (
-      <div className="empty-state">
-        <ShoppingBag size={44} />
-        <h3>No previous orders yet</h3>
-        <p>Your order history will appear here.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="live-feed">
-      {orders.map((order, index) => {
-        const canCancel = order.orderStatus === 'Placed' || order.orderStatus === 'Preparing';
-        return (
-          <article key={order.id || index} className="dashboard-card">
-            <div className="receipt-header-row">
+            {/* 2. MY INFO & ADDRESS TAB */}
+            {activeTab === 'profile' && (
               <div>
-                <h4>Order #{order.orderNumber}</h4>
-                <p className="cart-line-meta">{order.orderTime || (order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB') : 'Today')}</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                  <div>
+                    <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.15rem', fontWeight: 900 }}>
+                      ⚙️ Customer Contact Details &amp; Address
+                    </h4>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text2)' }}>Used to automatically pre-fill your checkout details.</p>
+                  </div>
+                  <button
+                    onClick={() => setIsEditingProfile(!isEditingProfile)}
+                    className="btn-add-item"
+                    style={{ padding: '7px 16px', fontSize: '0.82rem' }}
+                  >
+                    <Edit3 size={15} /> {isEditingProfile ? 'Cancel' : 'Edit Info'}
+                  </button>
+                </div>
+
+                {!isEditingProfile ? (
+                  <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', boxShadow: 'var(--shadow-sm)' }}>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Full Name</span>
+                      <p style={{ fontWeight: 800, fontSize: '0.98rem', marginTop: '2px' }}>{currentUser?.name}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Email Address</span>
+                      <p style={{ fontWeight: 800, fontSize: '0.98rem', marginTop: '2px' }}>{currentUser?.email}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Phone Number</span>
+                      <p style={{ fontWeight: 800, fontSize: '0.98rem', marginTop: '2px' }}>{currentUser?.phone}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Street Address</span>
+                      <p style={{ fontWeight: 800, fontSize: '0.98rem', marginTop: '2px' }}>{currentUser?.address}</p>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Postcode</span>
+                      <p style={{ fontWeight: 800, fontSize: '0.98rem', marginTop: '2px' }}>{currentUser?.postcode}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Full Name</label>
+                      <div className="input-group"><User size={16} /><input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} required /></div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Phone Number</label>
+                      <div className="input-group"><Phone size={16} /><input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} required /></div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Street Address</label>
+                      <div className="input-group"><MapPin size={16} /><input value={profileForm.address} onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })} required /></div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Postcode</label>
+                      <div className="input-group"><MapPin size={16} /><input value={profileForm.postcode} onChange={(e) => setProfileForm({ ...profileForm, postcode: e.target.value.toUpperCase() })} required /></div>
+                    </div>
+
+                    <button type="submit" className="btn-submit-modal" style={{ marginTop: '10px' }}>
+                      <Save size={16} /> Save Changes
+                    </button>
+                  </form>
+                )}
+
+                <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={handleLogout} style={{ color: 'var(--red)', fontSize: '0.85rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <LogOut size={16} /> Log Out of Account
+                  </button>
+                </div>
               </div>
-              <span className={`status-badge status-${(order.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>
-                {order.orderStatus || 'Completed'}
-              </span>
-            </div>
-            {order.items?.map((item, itemIndex) => (
-              <div key={`${item.id || getOrderItemName(item)}-${itemIndex}`} className="receipt-row">
-                <span>{item.quantity}x {getOrderItemName(item)}</span>
-                <span>GBP {(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
+            )}
+
+            {/* 3. LOYALTY REWARDS TAB */}
+            {activeTab === 'loyalty' && (
+              <div>
+                <div style={{
+                  background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)',
+                  borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid #FDE2E2',
+                  textAlign: 'center', marginBottom: '20px'
+                }}>
+                  <Sparkles size={32} color="var(--amber)" style={{ marginBottom: '8px' }} />
+                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900 }}>RFC Watford Loyalty Club</h4>
+                  <p style={{ fontSize: '0.86rem', color: 'var(--text2)', marginTop: '4px' }}>
+                    Collect 8 order stamps to receive a <strong>10% OFF Voucher</strong> on your next feast!
+                  </p>
+
+                  {/* Progress Bar */}
+                  <div style={{ margin: '20px 0 10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, marginBottom: '6px' }}>
+                      <span>Progress</span>
+                      <span>{loyaltyPercent}% Complete ({loyaltyCount}/8 Stamps)</span>
+                    </div>
+                    <div style={{ height: '10px', borderRadius: 'var(--radius-full)', background: 'var(--border)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${loyaltyPercent}%`, background: 'linear-gradient(90deg, var(--red), var(--amber))', transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+
+                  {/* 8 Stamp Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', margin: '20px 0' }}>
+                    {Array.from({ length: 8 }).map((_, i) => {
+                      const isFilled = i < loyaltyCount;
+                      return (
+                        <div key={i} style={{
+                          aspectRatio: '1', borderRadius: '16px',
+                          background: isFilled ? 'var(--red)' : '#FFF',
+                          border: isFilled ? 'none' : '2px dashed var(--border)',
+                          color: isFilled ? '#FFF' : 'var(--text3)',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 900, fontSize: '0.95rem', boxShadow: isFilled ? 'var(--shadow-red)' : 'none'
+                        }}>
+                          {isFilled ? <Check size={24} /> : <span>#{i + 1}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--red)' }}>
+                    🎉 Just {ordersNeeded} more order{ordersNeeded === 1 ? '' : 's'} until your free 10% reward!
+                  </p>
+                </div>
               </div>
-            ))}
-            <div className="receipt-total-row">
-              <span>Total</span>
-              <span>GBP {order.total?.toFixed(2) || '0.00'}</span>
-            </div>
-            <div className="receipt-actions" style={{ marginTop: 12 }}>
-              {canCancel && <button className="btn-soft-danger" type="button" onClick={() => onCancel(order)}>Cancel</button>}
-              <button className="btn-back" type="button" onClick={() => onPrintReceipt(order)}><Printer size={14} /> Receipt</button>
-              <button className="btn-add-item compact" type="button" onClick={() => onReorder(order)}><RotateCcw size={14} /> Reorder</button>
-            </div>
-          </article>
-        );
-      })}
+            )}
+
+            {/* 4. VOUCHERS TAB */}
+            {activeTab === 'vouchers' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {[
+                  { code: 'FIRST10', title: '10% OFF First Order', desc: 'Valid for new customers. No minimum spend required.' },
+                  { code: 'OVER25', title: '10% OFF Orders over £25', desc: 'Valid on delivery & collection orders over £25.' },
+                  { code: 'RFC10', title: '10% OFF Special Deal', desc: 'Exclusive offer for direct website orders.' },
+                ].map((v, i) => (
+                  <div key={i} className="voucher-card" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <span className="voucher-code">{v.code}</span>
+                      <h5 style={{ fontWeight: 800, fontSize: '0.95rem', marginTop: '2px' }}>{v.title}</h5>
+                      <p className="voucher-desc">{v.desc}</p>
+                    </div>
+                    <button
+                      className="copy-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(v.code).catch(() => {});
+                        if (showToast) showToast(`Voucher ${v.code} copied!`);
+                      }}
+                    >
+                      Copy Code
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 5. REVIEWS & COMPLAINTS TAB */}
+            {activeTab === 'reviews' && (
+              <ReviewsManager isAdmin={false} showToast={showToast} />
+            )}
+
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="modal-footer" style={{ justifyContent: 'center' }}>
+          <button className="mode-btn" onClick={onClose} style={{ width: '100%', justifyContent: 'center', border: '1px solid var(--border)' }}>
+            Close Customer Portal
+          </button>
+        </div>
+      </div>
+
+      {/* CANCEL ORDER MODAL */}
+      <CancelOrderModal
+        isOpen={!!cancelModalOrder}
+        onClose={() => setCancelModalOrder(null)}
+        order={cancelModalOrder}
+        onConfirmCancel={(orderId, reason) => {
+          if (onCancelOrder) onCancelOrder(orderId, reason);
+        }}
+      />
     </div>
   );
 }
-
-function ProfilePanel({ currentUser, profileForm, setProfileForm, isEditingProfile, setIsEditingProfile, onSave, onDelete }) {
-  if (!currentUser) {
-    return <p className="empty-state">Login to save your address and reorder faster.</p>;
-  }
-
-  return (
-    <section className="dashboard-card">
-      <div className="receipt-header-row">
-        <h4>Saved delivery profile</h4>
-        <button className="btn-add-item compact" type="button" onClick={() => setIsEditingProfile(!isEditingProfile)}>
-          <Edit3 size={14} /> {isEditingProfile ? 'Cancel' : 'Edit'}
-        </button>
-      </div>
-
-      {!isEditingProfile ? (
-        <div className="profile-detail-card">
-          <p><strong>Name:</strong> {currentUser.name}</p>
-          <p><strong>Email:</strong> {currentUser.email}</p>
-          <p><strong>Phone:</strong> {currentUser.phone || 'Not saved'}</p>
-          <p><strong>Address:</strong> {currentUser.address || 'Not saved'}</p>
-          <p><strong>Postcode:</strong> {currentUser.postcode || 'Not saved'}</p>
-        </div>
-      ) : (
-        <form onSubmit={onSave}>
-          {[
-            ['name', 'Full name', User],
-            ['phone', 'Phone', Phone],
-            ['address', 'Street address', MapPin],
-            ['postcode', 'Postcode', MapPin]
-          ].map(([field, label, Icon]) => (
-            <label key={field} className="input-group" style={{ marginBottom: 10 }}>
-              <Icon size={16} />
-              <input value={profileForm[field]} placeholder={label} onChange={(event) => setProfileForm({ ...profileForm, [field]: field === 'postcode' ? event.target.value.toUpperCase() : event.target.value })} />
-            </label>
-          ))}
-          <button className="btn-submit-modal" type="submit"><Save size={16} /> Save changes</button>
-        </form>
-      )}
-
-      <div className="danger-zone">
-        <h5>Account deletion</h5>
-        <p>Delete your customer login and anonymise retained order records.</p>
-        <button className="btn-soft-danger" type="button" onClick={onDelete}>Delete My Account</button>
-      </div>
-    </section>
-  );
-}
-
-CustomerDashboard.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  orders: PropTypes.array,
-  onReorder: PropTypes.func.isRequired,
-  onPrintReceipt: PropTypes.func.isRequired,
-  onCancelOrder: PropTypes.func,
-  showToast: PropTypes.func
-};
-
-AuthPanel.propTypes = {
-  authMode: PropTypes.oneOf(['login', 'register']).isRequired,
-  authForm: PropTypes.object.isRequired,
-  authError: PropTypes.string,
-  setAuthMode: PropTypes.func.isRequired,
-  setAuthForm: PropTypes.func.isRequired,
-  onSubmit: PropTypes.func.isRequired
-};
-
-OrderAgainCard.propTypes = {
-  order: PropTypes.object.isRequired,
-  onReorder: PropTypes.func.isRequired,
-  onPrintReceipt: PropTypes.func.isRequired
-};
-
-OrdersPanel.propTypes = {
-  orders: PropTypes.array.isRequired,
-  onReorder: PropTypes.func.isRequired,
-  onPrintReceipt: PropTypes.func.isRequired,
-  onCancel: PropTypes.func.isRequired
-};
-
-ProfilePanel.propTypes = {
-  currentUser: PropTypes.object,
-  profileForm: PropTypes.object.isRequired,
-  setProfileForm: PropTypes.func.isRequired,
-  isEditingProfile: PropTypes.bool.isRequired,
-  setIsEditingProfile: PropTypes.func.isRequired,
-  onSave: PropTypes.func.isRequired,
-  onDelete: PropTypes.func.isRequired
-};

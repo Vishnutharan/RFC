@@ -94,7 +94,7 @@ public sealed class OrderPricingService
                 return OrderPricingResult.Fail($"Delivery requires a minimum spend of GBP {DeliveryMinimumSpend:0.00}.");
             }
 
-            var deliveryCheck = _deliveryRadius.Check(order.DeliveryPostcode);
+            var deliveryCheck = await _deliveryRadius.CheckAsync(order.DeliveryPostcode);
             if (!deliveryCheck.IsEligible)
             {
                 return OrderPricingResult.Fail(deliveryCheck.Reason);

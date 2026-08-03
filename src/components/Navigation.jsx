@@ -1,20 +1,35 @@
 import React, { useMemo, useRef } from 'react';
-import { Beef, Drumstick, Grid2X2, IceCream, Package, Popcorn, ShoppingBag, Smile, UtensilsCrossed } from 'lucide-react';
-import { MENU_ITEMS } from '../data/initialMenu';
+import {
+  Beef,
+  Drumstick,
+  Grid2X2,
+  IceCream,
+  Package,
+  Popcorn,
+  ShoppingBag,
+  Smile,
+  UtensilsCrossed,
+} from 'lucide-react';
+import { CATEGORIES, MENU_ITEMS } from '../data/initialMenu';
+
+const ICON_MAP = {
+  Grid2X2,
+  Package,
+  Beef,
+  ShoppingBag,
+  Drumstick,
+  UtensilsCrossed,
+  Popcorn,
+  IceCream,
+  Smile,
+};
 
 const Navigation = ({ activeCategory, setActiveCategory }) => {
   const scrollRef = useRef(null);
 
   const categories = useMemo(() => [
-    { id: 'all', name: 'Full Menu', icon: Grid2X2 },
-    { id: 'box-meals', name: 'Box Meals', icon: Package },
-    { id: 'burgers-meals', name: 'Burgers & Meals', icon: Beef },
-    { id: 'family-buckets', name: 'Family Buckets', icon: ShoppingBag },
-    { id: 'fried-chicken', name: 'Chicken & Wings', icon: Drumstick },
-    { id: 'wraps', name: 'Wraps & Ribs', icon: UtensilsCrossed },
-    { id: 'sides', name: 'Sides & Dips', icon: Popcorn },
-    { id: 'desserts-drinks', name: 'Desserts & Drinks', icon: IceCream },
-    { id: 'kids', name: 'Kids Meals', icon: Smile },
+    { id: 'all', name: 'Full Menu', icon: 'Grid2X2' },
+    ...(CATEGORIES || []),
   ], []);
 
   const getCount = (catId) => {
@@ -39,7 +54,7 @@ const Navigation = ({ activeCategory, setActiveCategory }) => {
     <nav className="category-nav-bar" aria-label="Menu categories">
       <div className="category-nav-container" ref={scrollRef}>
         {categories.map((cat) => {
-          const Icon = cat.icon;
+          const Icon = typeof cat.icon === 'string' ? (ICON_MAP[cat.icon] || Grid2X2) : (cat.icon || Grid2X2);
           return (
             <button
               key={cat.id}

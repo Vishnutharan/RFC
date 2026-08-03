@@ -23,12 +23,20 @@ public class AuthController : ControllerBase
 
     private readonly RfcDbContext? _db;
     private readonly AuditService? _audit;
+    private readonly IConfiguration _configuration;
+    private readonly IHostEnvironment _environment;
     private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IServiceProvider provider, ILogger<AuthController> logger)
+    public AuthController(
+        IServiceProvider provider,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        ILogger<AuthController> logger)
     {
         _db = provider.GetService<RfcDbContext>();
         _audit = provider.GetService<AuditService>();
+        _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -368,6 +376,17 @@ public class AuthController : ControllerBase
 
     private ObjectResult ServiceUnavailable()
     {
+        if (_environment.IsDevelopment())
+        {
+            var connectionString = _configuration.GetConnectionString("RfcDatabase") ?? string.Empty;
+            var message = connectionString.Contains("YOUR_PASSWORD", StringComparison.OrdinalIgnoreCase) ||
+                          connectionString.Contains("replace-me", StringComparison.OrdinalIgnoreCase)
+                ? "Supabase database password is missing. Replace YOUR_PASSWORD in .env.local with the real database password, then restart the backend."
+                : "Supabase database connection failed. Check the database password, pooler host, and network access.";
+
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message });
+        }
+
         return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ServiceUnavailableMessage });
     }
 }

@@ -5,7 +5,7 @@ import { CardElement, Elements, useElements, useStripe } from '@stripe/react-str
 import { loadStripe } from '@stripe/stripe-js';
 import { AlertTriangle, Banknote, CheckCircle, CreditCard, Lock, Mail, MapPin, Phone, Store, Truck, User, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { checkDeliveryEligibility } from '../utils/deliveryRadius';
+import { checkDeliveryEligibility, getDeliveryEligibility } from '../utils/deliveryRadius';
 import { getCurrentUser } from '../services/customerAuth';
 import { createPaymentIntent } from '../services/api';
 
@@ -27,6 +27,7 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [radiusCheck, setRadiusCheck] = useState(() => checkDeliveryEligibility(''));
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -61,11 +62,32 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
     };
   }, [isOpen]);
 
-  const radiusCheck = useMemo(() => {
+  useEffect(() => {
     if (orderMode === 'collection') {
-      return { isEligible: true, distanceKm: 0, reason: 'Store collection from 119 Courtlands Drive, Watford' };
+      setRadiusCheck({ isEligible: true, isChecking: false, distanceKm: 0, reason: 'Store collection from 119 Courtlands Dr, Watford WD17 4HZ' });
+      return undefined;
     }
-    return checkDeliveryEligibility(formData.postcode);
+
+    const fallback = checkDeliveryEligibility(formData.postcode);
+    if (!formData.postcode || formData.postcode.trim().length < 5) {
+      setRadiusCheck(fallback);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    setRadiusCheck({
+      ...fallback,
+      isChecking: true,
+      reason: 'Checking exact 5 km delivery radius...'
+    });
+
+    getDeliveryEligibility(formData.postcode, { signal: controller.signal })
+      .then(setRadiusCheck)
+      .catch((error) => {
+        if (error?.name !== 'AbortError') setRadiusCheck(fallback);
+      });
+
+    return () => controller.abort();
   }, [formData.postcode, orderMode]);
 
   const subtotal = useMemo(
@@ -85,7 +107,8 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
     if (orderMode === 'delivery') {
       return formData.address.trim().length >= 3 &&
         formData.postcode.trim().length >= 3 &&
-        radiusCheck.isEligible;
+        radiusCheck.isEligible &&
+        !radiusCheck.isChecking;
     }
 
     return true;
@@ -247,8 +270,8 @@ function CheckoutForm({ isOpen, onClose, cartItems = [], orderMode, appliedVouch
                         <input name="postcode" placeholder="Postcode" value={formData.postcode} onChange={handleChange} required />
                       </label>
                     </div>
-                    <div className={`checkout-radius ${radiusCheck.isEligible ? 'ok' : 'error'}`}>
-                      {radiusCheck.isEligible ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+                    <div className={`checkout-radius ${radiusCheck.isChecking ? 'checking' : radiusCheck.isEligible ? 'ok' : 'error'}`}>
+                      {radiusCheck.isEligible && !radiusCheck.isChecking ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
                       <span>{radiusCheck.reason}</span>
                     </div>
                     <label className="input-group">

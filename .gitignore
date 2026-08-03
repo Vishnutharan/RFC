@@ -3,6 +3,8 @@ node_modules/
 dist/
 build/
 *.log
+backend-*.err
+frontend-*.err
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -37,3 +39,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Screenshots & edge profiles
+screenshots/
+

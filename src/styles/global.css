@@ -70,10 +70,7 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 15% 10%, rgba(249,115,22,0.05), transparent 30%),
-    radial-gradient(circle at 90% 20%, rgba(251,146,60,0.04), transparent 26%),
-    linear-gradient(180deg, #FFF7ED 0%, #FFFAF5 46%, #FFF7ED 100%);
+  background: linear-gradient(180deg, #FFF7ED 0%, #FFFAF5 46%, #FFF7ED 100%);
 }
 
 button,

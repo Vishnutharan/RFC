@@ -167,7 +167,14 @@ export default function Header({
                 {link.label}
               </a>
             ))}
-            <button className="dashboard-tab" type="button" onClick={onStaffPanelClick}>
+            <button
+              className="dashboard-tab"
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                onStaffPanelClick();
+              }}
+            >
               {staffLabel}
             </button>
           </nav>

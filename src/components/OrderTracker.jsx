@@ -7,7 +7,7 @@ import CancelOrderModal from './CancelOrderModal';
 import { useSignalR } from '../hooks/useSignalR';
 import { refreshOrderEta } from '../services/api';
 
-const STORE_LOCATION = { lat: 51.6742, lng: -0.4085 };
+const STORE_LOCATION = { lat: 51.682366, lng: -0.41867 };
 const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const STEPS = [
@@ -106,110 +106,122 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder, showToa
   }, [currentStep, isCancelled, trackedOrder]);
 
   return (
-    <main id="track-order" className="tracker-container">
+    <main id="track-order" style={{ maxWidth: '1200px', margin: '2rem auto', padding: '0 1rem', fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
       <motion.div
-        className="tracker-card"
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem' }}
       >
-        <div className="tracker-layout">
-          <section>
-            <header className="tracker-header">
-              <div className={`tracker-status-icon ${isCancelled ? 'cancelled' : ''}`}>
-                {isCancelled ? <AlertTriangle size={34} /> : <CheckCircle size={34} />}
-              </div>
-              <h2>{isCancelled ? 'Order Cancelled' : 'Order Confirmed'}</h2>
-              <p>Order #{trackedOrder?.orderNumber || 'RFC-000000'}</p>
-              <p className="tracker-time">
-                <Clock size={14} />
-                {trackedOrder?.orderTime || (trackedOrder?.createdAt ? new Date(trackedOrder.createdAt).toLocaleString('en-GB') : 'Just now')}
-              </p>
-              {!isCancelled && (
-                <div className="eta-block">
-                  <strong>{mins}:{secs.toString().padStart(2, '0')}</strong>
-                  <span>{trackedOrder?.orderType === 'collection' ? 'Estimated collection time' : 'Estimated arrival time'}</span>
-                </div>
-              )}
-              <span className={`realtime-pill ${isConnected ? 'connected' : ''}`}>
-                {isConnected ? 'Status updates connected' : 'Status updates pending'}
-              </span>
-            </header>
-
-            <div className={`tracker-message ${isCancelled ? 'cancelled' : ''}`}>
-              {statusMessage}
+        <section style={{ flex: '1 1 500px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)', textAlign: 'center' }}>
+            <div style={{ color: isCancelled ? 'var(--red)' : 'var(--green)', display: 'inline-flex', marginBottom: '1rem' }}>
+               {isCancelled ? <AlertTriangle size={48} /> : <CheckCircle size={48} />}
             </div>
-
-            <DeliveryExperience
-              destination={deliveryDestination}
-              etaMinutes={trackedOrder?.etaMinutes || 25}
-              isCollection={trackedOrder?.orderType === 'collection'}
-            />
-          </section>
-
-          <aside>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', margin: '0 0 0.5rem 0', color: 'var(--text)' }}>
+              {isCancelled ? 'Order Cancelled' : 'Order Confirmed'}
+            </h2>
+            <p style={{ color: 'var(--text2)', margin: '0 0 1rem 0' }}>Order #{trackedOrder?.orderNumber || 'RFC-000000'}</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: 'var(--text2)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              <Clock size={16} />
+              {trackedOrder?.orderTime || (trackedOrder?.createdAt ? new Date(trackedOrder.createdAt).toLocaleString('en-GB') : 'Just now')}
+            </div>
             {!isCancelled && (
-              <div className="status-timeline">
+              <div style={{ padding: '1rem', backgroundColor: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1rem' }}>
+                <strong style={{ fontSize: '2.5rem', fontFamily: 'var(--font-head)', color: 'var(--text)', lineHeight: 1 }}>{mins}:{secs.toString().padStart(2, '0')}</strong>
+                <span style={{ color: 'var(--text2)', fontSize: '0.9rem', marginTop: '0.5rem' }}>{trackedOrder?.orderType === 'collection' ? 'Estimated collection time' : 'Estimated arrival time'}</span>
+              </div>
+            )}
+            <div style={{ display: 'inline-block', padding: '0.35rem 0.85rem', borderRadius: 'var(--radius-full)', fontSize: '0.85rem', backgroundColor: isConnected ? 'var(--green)' : 'var(--amber)', color: 'var(--white)', fontWeight: 600 }}>
+              {isConnected ? 'Status updates connected' : 'Status updates pending'}
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: isCancelled ? 'var(--red)' : 'var(--surface)', color: isCancelled ? 'var(--white)' : 'var(--text)', padding: '1.5rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', border: isCancelled ? 'none' : '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontWeight: 500, fontSize: '1.05rem' }}>
+            {statusMessage}
+          </div>
+
+          <DeliveryExperience
+            destination={deliveryDestination}
+            etaMinutes={trackedOrder?.etaMinutes || 25}
+            isCollection={trackedOrder?.orderType === 'collection'}
+          />
+        </section>
+
+        <aside style={{ flex: '1 1 350px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {!isCancelled && (
+            <div style={{ backgroundColor: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+              <h3 style={{ fontFamily: 'var(--font-head)', margin: '0 0 1.5rem 0', fontSize: '1.25rem' }}>Order Status</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {STEPS.map((step, index) => {
                   const StepIcon = trackedOrder?.orderType === 'collection' && step.status === 'Out for Delivery' ? Store : step.icon;
                   const isDone = index + 1 < currentStep;
                   const isActive = index + 1 === currentStep;
+                  const isPending = index + 1 > currentStep;
+                  
                   return (
                     <motion.div
                       key={step.status}
-                      className={`status-step ${isDone ? 'completed' : ''} ${isActive ? 'active' : ''}`}
                       initial={{ opacity: 0, x: 16 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.06 }}
+                      style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', opacity: isPending ? 0.5 : 1 }}
                     >
-                      <div className="step-circle">
-                        {isDone ? <CheckCircle size={21} /> : <StepIcon size={20} />}
+                      <div style={{ 
+                        width: '40px', height: '40px', borderRadius: 'var(--radius-full)', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        backgroundColor: isDone ? 'var(--green)' : isActive ? 'var(--indigo)' : 'var(--surface-alt)',
+                        color: isDone || isActive ? 'var(--white)' : 'var(--text3)'
+                      }}>
+                        {isDone ? <CheckCircle size={20} /> : <StepIcon size={20} />}
                       </div>
                       <div>
-                        <span className="step-label">{trackedOrder?.orderType === 'collection' && step.status === 'Out for Delivery' ? 'Ready Soon' : step.label}</span>
-                        <span className="step-copy">{step.msg}</span>
+                        <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: '0.25rem' }}>{trackedOrder?.orderType === 'collection' && step.status === 'Out for Delivery' ? 'Ready Soon' : step.label}</div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--text2)' }}>{step.msg}</div>
                       </div>
                     </motion.div>
                   );
                 })}
               </div>
-            )}
+            </div>
+          )}
 
-            {trackedOrder && (
-              <div className="receipt-section">
-                <div className="receipt-header-row">
-                  <h4>Order Summary</h4>
-                  <div className="receipt-actions">
-                    {canCancel && (
-                      <button className="btn-soft-danger" type="button" onClick={() => setIsCancelOpen(true)}>
-                        Cancel
-                      </button>
-                    )}
-                    <button onClick={() => setIsPrintOpen(true)} className="btn-add-item compact" type="button">
-                      <Printer size={14} /> Receipt
+          {trackedOrder && (
+            <div style={{ backgroundColor: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ fontFamily: 'var(--font-head)', margin: 0, fontSize: '1.25rem' }}>Order Summary</h3>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {canCancel && (
+                    <button onClick={() => setIsCancelOpen(true)} style={{ padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--red)', backgroundColor: 'transparent', color: 'var(--red)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      Cancel
                     </button>
-                  </div>
-                </div>
-
-                {trackedOrder.items?.map((item, index) => (
-                  <div key={`${item.id || getOrderItemName(item)}-${index}`} className="receipt-row">
-                    <span>{item.quantity}x {getOrderItemName(item)}</span>
-                    <span>GBP {(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
-
-                <div className="receipt-total-row">
-                  <span>Total</span>
-                  <span>GBP {trackedOrder.total?.toFixed(2) || '0.00'}</span>
+                  )}
+                  <button onClick={() => setIsPrintOpen(true)} style={{ padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', border: 'none', backgroundColor: 'var(--surface-alt)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Printer size={16} /> Receipt
+                  </button>
                 </div>
               </div>
-            )}
 
-            <button onClick={onNewOrder} className="tracker-back-btn" type="button">
-              <ArrowLeft size={16} /> Back to Menu
-            </button>
-          </aside>
-        </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                {trackedOrder.items?.map((item, index) => (
+                  <div key={`${item.id || getOrderItemName(item)}-${index}`} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text)' }}>
+                    <span>{item.quantity}x {getOrderItemName(item)}</span>
+                    <span style={{ fontWeight: 500 }}>£{(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '1.15rem', color: 'var(--text)' }}>
+                <span>Total</span>
+                <span>£{trackedOrder.total?.toFixed(2) || '0.00'}</span>
+              </div>
+            </div>
+          )}
+
+          <button onClick={onNewOrder} style={{ padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', boxShadow: 'var(--shadow-sm)' }}>
+            <ArrowLeft size={18} /> Back to Menu
+          </button>
+        </aside>
       </motion.div>
 
       <PrintReceiptModal
@@ -234,10 +246,10 @@ export default function OrderTracker({ order, onNewOrder, onCancelOrder, showToa
 function DeliveryExperience({ destination, etaMinutes, isCollection }) {
   if (isCollection || !destination || !googleMapsKey) {
     return (
-      <div className="delivery-map-panel fallback">
+      <div style={{ backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)', textAlign: 'center' }}>
         <FallbackRoute isCollection={isCollection} />
-        <p>{isCollection ? 'Estimated collection: around 15 minutes' : `Estimated arrival: about ${etaMinutes || 25} minutes`}</p>
-        <span>{isCollection ? 'We will hold your food hot at the counter.' : 'Route and ETA are estimates, not live driver GPS.'}</span>
+        <p style={{ fontWeight: 600, margin: '1rem 0 0.5rem 0', color: 'var(--text)' }}>{isCollection ? 'Estimated collection: around 15 minutes' : `Estimated arrival: about ${etaMinutes || 25} minutes`}</p>
+        <span style={{ color: 'var(--text2)', fontSize: '0.9rem' }}>{isCollection ? 'We will hold your food hot at the counter.' : 'Route and ETA are estimates, not live driver GPS.'}</span>
       </div>
     );
   }
@@ -247,13 +259,17 @@ function DeliveryExperience({ destination, etaMinutes, isCollection }) {
 
 function FallbackRoute({ isCollection }) {
   return (
-    <div className="fallback-route" aria-label={isCollection ? 'Collection progress' : 'Delivery route'}>
-      <svg viewBox="0 0 640 230" preserveAspectRatio="none" aria-hidden="true">
-        <path className="route-dash" d="M35 160 C130 45 230 200 325 112 S505 65 610 155" />
+    <div style={{ position: 'relative', height: '140px', backgroundColor: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg viewBox="0 0 640 230" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.15 }}>
+        <path d="M35 160 C130 45 230 200 325 112 S505 65 610 155" fill="none" stroke="var(--text)" strokeWidth="4" strokeDasharray="10, 10" />
       </svg>
-      <div className="scooter">
-        {isCollection ? <Store size={30} /> : <Bike size={32} />}
-      </div>
+      <motion.div
+        animate={{ x: [ -60, 60, -60 ] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        style={{ color: 'var(--indigo)', zIndex: 1, backgroundColor: 'var(--white)', padding: '1rem', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-md)' }}
+      >
+        {isCollection ? <Store size={36} /> : <Bike size={36} />}
+      </motion.div>
     </div>
   );
 }
@@ -308,9 +324,6 @@ function DeliveryMap({ destination, etaMinutes }) {
       });
     };
 
-    // TODO: Real driver GPS is not implemented. Add driver lat/lng posting,
-    // a DriverLocation table or cache, and SignalR location broadcasts before
-    // presenting this as live driver movement.
     if (window.google?.maps) {
       renderMap();
     } else {
@@ -336,19 +349,19 @@ function DeliveryMap({ destination, etaMinutes }) {
 
   if (mapError) {
     return (
-      <div className="delivery-map-panel fallback">
+      <div style={{ backgroundColor: 'var(--surface)', padding: '2rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)', textAlign: 'center' }}>
         <FallbackRoute />
-        <p>{etaText}</p>
-        <span>{mapError}</span>
+        <p style={{ fontWeight: 600, margin: '1rem 0 0.5rem 0', color: 'var(--text)' }}>{etaText}</p>
+        <span style={{ color: 'var(--text2)', fontSize: '0.9rem' }}>{mapError}</span>
       </div>
     );
   }
 
   return (
-    <div className="delivery-map-panel">
-      <div ref={mapRef} className="delivery-map" />
-      <p>{etaText}</p>
-      <span>Estimated route, not live driver GPS.</span>
+    <div style={{ backgroundColor: 'var(--surface)', padding: '1.5rem', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+      <div ref={mapRef} style={{ height: '300px', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', backgroundColor: 'var(--surface-alt)' }} />
+      <p style={{ fontWeight: 600, margin: '0 0 0.5rem 0', color: 'var(--text)' }}>{etaText}</p>
+      <span style={{ color: 'var(--text2)', fontSize: '0.9rem' }}>Estimated route, not live driver GPS.</span>
     </div>
   );
 }

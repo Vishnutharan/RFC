@@ -1,387 +1,367 @@
-import { useEffect, useMemo, useState } from 'react';
-import PropTypes from 'prop-types';
-import { Calendar, Download, Eye, Printer, RefreshCw, Search, ShoppingBag, Timer, TrendingUp, Truck, X } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ShoppingBag, TrendingUp, DollarSign, Clock, RefreshCw, Download, CheckCircle, Truck, AlertTriangle, ChevronRight, Search, Printer, Calendar, Star, MessageSquare, Flame } from 'lucide-react';
 import { getAdminOrders, updateOrderStatus } from '../services/api';
 import PrintReceiptModal from './PrintReceiptModal';
 import ReviewsManager from './ReviewsManager';
 
-const STATUS_OPTIONS = ['Placed', 'Preparing', 'Out for Delivery', 'Completed', 'Cancelled'];
-const STATUS_CLASS = {
-  Placed: 'status-placed',
-  Preparing: 'status-preparing',
-  'Out for Delivery': 'status-outfordelivery',
-  Completed: 'status-completed',
-  Cancelled: 'status-cancelled'
-};
-
-const getOrderItemName = (item) => item.name || item.item?.name || 'Menu item';
-const getOrderItemUnitPrice = (item) => Number(item.price ?? item.unitPrice ?? item.item?.price ?? 0);
-
-export default function AdminDashboard({ showToast, adminUser, onExit }) {
-  const [activeTab, setActiveTab] = useState('orders');
+export default function AdminDashboard({ showToast }) {
   const [orders, setOrders] = useState([]);
-  const [filter, setFilter] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [selectedOrderForPrint, setSelectedOrderForPrint] = useState(null);
-  const [selectedOrderForDetail, setSelectedOrderForDetail] = useState(null);
+  const [activeTab, setActiveTab] = useState('kanban'); // 'kanban', 'daily_sales', 'reviews'
+  const [printModalOrder, setPrintModalOrder] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const loadOrders = async () => {
+  const fetchOrders = async () => {
     setLoading(true);
     try {
       const data = await getAdminOrders();
       setOrders(data || []);
-    } catch (error) {
-      setOrders([]);
-      showToast?.(error.message || 'Could not load staff orders.', 'error');
+    } catch (e) {
+      console.warn('Failed to load admin orders');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadOrders();
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = async (orderId, newStatus) => {
     try {
       await updateOrderStatus(orderId, newStatus);
-      setOrders((prev) => prev.map((order) => order.id === orderId ? { ...order, orderStatus: newStatus } : order));
-      setSelectedOrderForDetail((prev) => prev?.id === orderId ? { ...prev, orderStatus: newStatus } : prev);
-      showToast?.(`Order updated to ${newStatus}.`);
-    } catch (error) {
-      showToast?.(error.message || 'Order status could not be updated.', 'error');
+      setOrders(prev => prev.map(o => (o.id === orderId || o.orderNumber === orderId) ? { ...o, orderStatus: newStatus } : o));
+      if (showToast) showToast(`Order #${orderId} moved to ${newStatus}`);
+    } catch (e) {
+      if (showToast) showToast('Failed to update status', 'error');
     }
   };
 
-  const handleExportCSV = () => {
-    if (orders.length === 0) return;
-    const headers = ['Order Number', 'Order Time', 'Type', 'Customer Name', 'Phone', 'Address', 'Total GBP', 'Status'];
-    const rows = orders.map((order) => [
-      order.orderNumber,
-      `"${order.orderTime || (order.createdAt ? new Date(order.createdAt).toLocaleString() : '')}"`,
-      order.orderType,
-      `"${order.customerName || ''}"`,
-      `"${order.customerPhone || ''}"`,
-      `"${order.deliveryAddress || ''}"`,
-      order.total?.toFixed(2) || '0.00',
-      order.orderStatus
-    ]);
+  // KPIs
+  const totalRevenue = useMemo(() => orders.reduce((sum, o) => sum + (o.total || 0), 0), [orders]);
+  const totalOrdersCount = orders.length;
+  const activeKitchenCount = useMemo(() => orders.filter(o => o.orderStatus === 'Placed' || o.orderStatus === 'Preparing').length, [orders]);
+  const avgOrderValue = totalOrdersCount > 0 ? totalRevenue / totalOrdersCount : 0;
 
-    const csvContent = `data:text/csv;charset=utf-8,${[headers.join(','), ...rows.map((row) => row.join(','))].join('\n')}`;
+  // Kanban Columns
+  const kanbanColumns = [
+    { id: 'Placed', title: '🔵 Placed (New)', bg: '#E0F2FE', color: '#0369A1' },
+    { id: 'Preparing', title: '🟡 In Kitchen', bg: '#FEF3C7', color: '#B45309' },
+    { id: 'Out for Delivery', title: '🟣 Out for Delivery', bg: '#EEF2FF', color: '#4338CA' },
+    { id: 'Completed', title: '🟢 Completed', bg: '#ECFDF5', color: '#047857' },
+  ];
+
+  // Filtered Orders for Search
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery) return orders;
+    const q = searchQuery.toLowerCase();
+    return orders.filter(o =>
+      (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
+      (o.customerName && o.customerName.toLowerCase().includes(q)) ||
+      (o.customerPhone && o.customerPhone.includes(q))
+    );
+  }, [orders, searchQuery]);
+
+  // Daily Sales Filtering
+  const dailySalesOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (!o.createdAt && !o.orderTime) return true;
+      const d = o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : '';
+      return d === selectedDate || !d;
+    });
+  }, [orders, selectedDate]);
+
+  const dailyRevenue = useMemo(() => dailySalesOrders.reduce((s, o) => s + (o.total || 0), 0), [dailySalesOrders]);
+
+  const exportCSV = () => {
+    if (orders.length === 0) return;
+    const headers = ['Order Number', 'Date/Time', 'Customer', 'Phone', 'Type', 'Status', 'Payment', 'Total (£)'];
+    const rows = orders.map(o => [
+      o.orderNumber,
+      `"${o.orderTime || o.createdAt}"`,
+      `"${o.customerName}"`,
+      `"${o.customerPhone}"`,
+      o.orderType,
+      o.orderStatus,
+      o.paymentMethod,
+      o.total
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
-    link.href = encodeURI(csvContent);
-    link.download = `RFC_Orders_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `RFC_Orders_Export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast?.('Orders exported to CSV.');
   };
 
-  const filteredOrders = useMemo(() => orders.filter((order) => {
-    const query = searchQuery.trim().toLowerCase();
-    const matchesFilter = filter === 'All' || order.orderStatus === filter;
-    const matchesSearch = !query ||
-      order.orderNumber?.toLowerCase().includes(query) ||
-      order.customerName?.toLowerCase().includes(query) ||
-      order.customerPhone?.toLowerCase().includes(query) ||
-      order.deliveryAddress?.toLowerCase().includes(query);
-    return matchesFilter && matchesSearch;
-  }), [filter, orders, searchQuery]);
-
-  const dailySalesData = useMemo(() => {
-    const dayOrders = orders.filter((order) => {
-      const orderDate = order.createdAt ? order.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
-      return orderDate === selectedDate;
-    });
-    const dayRevenue = dayOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const deliveryCount = dayOrders.filter((order) => order.orderType === 'delivery').length;
-    const collectionCount = dayOrders.filter((order) => order.orderType === 'collection').length;
-    const topItemsMap = {};
-    dayOrders.forEach((order) => {
-      order.items?.forEach((item) => {
-        const name = getOrderItemName(item);
-        topItemsMap[name] = (topItemsMap[name] || 0) + Number(item.quantity || 1);
-      });
-    });
-
-    return {
-      dayOrders,
-      dayRevenue,
-      deliveryCount,
-      collectionCount,
-      topItems: Object.entries(topItemsMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    };
-  }, [orders, selectedDate]);
-
-  const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const activeCount = orders.filter((order) => order.orderStatus !== 'Completed' && order.orderStatus !== 'Cancelled').length;
-  const avgValue = orders.length ? totalRevenue / orders.length : 0;
-  const todayOrders = orders.filter((order) => (order.createdAt || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
-
   return (
-    <main className="admin-container">
-      <motion.header className="admin-header" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+    <div className="admin-container">
+      
+      {/* Header Bar */}
+      <div className="admin-header">
         <div>
-          <h2>Store Manager</h2>
-          <p className="modal-subtitle">Live order operations for {adminUser?.email || 'RFC staff'}.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2>RFC Store Management POS</h2>
+            <span className="card-badge badge-spicy" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FFF', animation: 'pulse 1.2s infinite' }} /> LIVE
+            </span>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '2px' }}>
+            Store: RFC Watford • 119 Courtlands Drive, WD17 4HZ
+          </p>
         </div>
-        <div className="admin-actions">
-          <button className="btn-back" type="button" onClick={onExit}>Storefront</button>
-          <button className="btn-back" type="button" onClick={handleExportCSV}><Download size={16} /> Export</button>
-          <button className="btn-add-item compact" type="button" onClick={loadOrders}><RefreshCw size={16} /> Refresh</button>
-        </div>
-      </motion.header>
 
-      <div className="dashboard-tabs">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="search-container" style={{ width: '200px' }}>
+            <Search size={16} />
+            <input
+              placeholder="Search orders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+          </div>
+
+          <button onClick={fetchOrders} className="mode-btn" style={{ background: '#FFF', border: '1px solid var(--border)' }}>
+            <RefreshCw size={16} className={loading ? 'spin' : ''} /> Refresh
+          </button>
+          <button onClick={exportCSV} className="btn-add-item" style={{ padding: '8px 16px' }}>
+            <Download size={16} /> Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Metric Cards */}
+      <div className="admin-metrics">
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Sales Revenue</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--red)' }}>£{totalRevenue.toFixed(2)}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--red-light)', color: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><DollarSign size={20} /></div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Total Orders</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem' }}>{totalOrdersCount}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#EEF2FF', color: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={20} /></div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Active Kitchen Queue</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--amber)' }}>{activeKitchenCount}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--amber-light)', color: 'var(--amber)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Clock size={20} /></div>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Avg Ticket Value (AOV)</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.6rem', color: 'var(--green)' }}>£{avgOrderValue.toFixed(2)}</span>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--green-light)', color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><TrendingUp size={20} /></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)', paddingBottom: '10px', marginBottom: '20px' }}>
         {[
-          { id: 'orders', label: 'Live Orders', count: orders.length },
-          { id: 'daily-sales', label: 'Daily Sales', count: `GBP ${dailySalesData.dayRevenue.toFixed(0)}` },
-          { id: 'reviews', label: 'Reviews', count: '' }
-        ].map((tab) => (
+          { id: 'kanban', label: '📋 Live Kitchen Kanban Board', count: activeKitchenCount },
+          { id: 'daily_sales', label: '📅 Daily Sales Inspector', count: '' },
+          { id: 'reviews', label: '⭐ Customer Reviews & Complaints', count: '' },
+        ].map(t => (
           <button
-            key={tab.id}
-            className={`dashboard-tab ${activeTab === tab.id ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              padding: '10px 18px', borderRadius: 'var(--radius-full)',
+              fontWeight: activeTab === t.id ? 800 : 600,
+              background: activeTab === t.id ? 'var(--red)' : '#FFF',
+              color: activeTab === t.id ? '#FFF' : 'var(--text2)',
+              border: activeTab === t.id ? 'none' : '1px solid var(--border)',
+              fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'
+            }}
           >
-            {tab.label} {tab.count && <span>({tab.count})</span>}
+            <span>{t.label}</span>
+            {t.count !== '' && <span className="cat-badge" style={{ background: activeTab === t.id ? 'rgba(255,255,255,0.3)' : 'var(--surface-alt)' }}>{t.count}</span>}
           </button>
         ))}
       </div>
 
-      {activeTab === 'orders' && (
-        <>
-          <section className="admin-metrics">
-            <KpiCard icon={ShoppingBag} label="Orders Today" value={todayOrders.toString()} />
-            <KpiCard icon={TrendingUp} label="Revenue" value={`GBP ${totalRevenue.toFixed(0)}`} />
-            <KpiCard icon={Timer} label="Avg Prep Time" value="18m" />
-            <KpiCard icon={Truck} label="Active Deliveries" value={activeCount.toString()} />
-          </section>
-
-          <div className="admin-toolbar">
-            <div className="filter-tabs">
-              {['All', ...STATUS_OPTIONS].map((status) => (
-                <button
-                  key={status}
-                  className={`filter-tab ${filter === status ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => setFilter(status)}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-            <label className="search-container">
-              <Search size={16} />
-              <input
-                className="search-input"
-                placeholder="Search order, customer, phone..."
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-            </label>
-          </div>
-
-          {loading ? (
-            <div className="empty-state">Loading orders...</div>
-          ) : filteredOrders.length === 0 ? (
-            <div className="empty-state">No matching orders found.</div>
-          ) : (
-            <OrdersTable
-              orders={filteredOrders}
-              onStatusChange={handleStatusChange}
-              onView={setSelectedOrderForDetail}
-              onPrint={setSelectedOrderForPrint}
-            />
-          )}
-
-          <section className="dashboard-card" style={{ marginTop: 20 }}>
-            <h4>Live activity feed</h4>
-            <div className="live-feed">
-              {orders.slice(0, 5).map((order) => (
-                <div key={order.id || order.orderNumber} className="feed-item">
-                  <strong>#{order.orderNumber}</strong> {order.customerName || 'Customer'} - {order.orderStatus}
+      {/* 1. LIVE KITCHEN KANBAN BOARD */}
+      {activeTab === 'kanban' && (
+        <div className="kanban-board">
+          {kanbanColumns.map(col => {
+            const colOrders = filteredOrders.filter(o => o.orderStatus === col.id || (col.id === 'Completed' && o.orderStatus === 'Delivered'));
+            return (
+              <div key={col.id} className="kanban-col">
+                <div className="kanban-header" style={{ color: col.color }}>
+                  <span>{col.title}</span>
+                  <span className="cat-badge" style={{ background: col.bg, color: col.color }}>{colOrders.length}</span>
                 </div>
-              ))}
-            </div>
-          </section>
-        </>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {colOrders.length === 0 ? (
+                    <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--text3)', fontSize: '0.82rem' }}>
+                      No orders in this status
+                    </div>
+                  ) : (
+                    colOrders.map((ord, idx) => (
+                      <div key={ord.id || idx} className="kanban-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 900, fontFamily: 'var(--font-head)', fontSize: '0.98rem' }}>#{ord.orderNumber}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text3)', fontWeight: 600 }}>
+                            {ord.orderTime ? ord.orderTime.split(',')[1] : 'Just now'}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '0.83rem', color: 'var(--text2)' }}>
+                          <p style={{ fontWeight: 800, color: 'var(--text)' }}>👤 {ord.customerName}</p>
+                          <p>📞 {ord.customerPhone}</p>
+                          <p style={{ marginTop: '4px' }}>
+                            {ord.orderType === 'delivery' ? `🚚 ${ord.deliveryAddress}` : '🏪 Store Pickup'}
+                          </p>
+                        </div>
+
+                        {/* Items */}
+                        <div style={{ background: 'var(--surface-alt)', padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem' }}>
+                          {ord.items && ord.items.map((it, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{it.quantity}x {it.name}</span>
+                              <span style={{ fontWeight: 700 }}>£{(it.price * it.quantity).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                          <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.05rem', color: 'var(--red)' }}>
+                            £{ord.total?.toFixed(2)}
+                          </span>
+
+                          <button
+                            onClick={() => setPrintModalOrder(ord)}
+                            className="mode-btn"
+                            style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid var(--border)' }}
+                            title="Print Kitchen Docket"
+                          >
+                            <Printer size={13} /> Print
+                          </button>
+                        </div>
+
+                        {/* Status Advance Buttons */}
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                          {col.id === 'Placed' && (
+                            <button onClick={() => handleStatusChange(ord.id || ord.orderNumber, 'Preparing')} className="btn-submit-modal" style={{ width: '100%', padding: '6px', fontSize: '0.78rem' }}>
+                              Send to Kitchen ➔
+                            </button>
+                          )}
+                          {col.id === 'Preparing' && (
+                            <button onClick={() => handleStatusChange(ord.id || ord.orderNumber, 'Out for Delivery')} className="btn-submit-modal" style={{ width: '100%', padding: '6px', fontSize: '0.78rem', background: 'var(--indigo)' }}>
+                              Dispatch Driver ➔
+                            </button>
+                          )}
+                          {col.id === 'Out for Delivery' && (
+                            <button onClick={() => handleStatusChange(ord.id || ord.orderNumber, 'Completed')} className="btn-submit-modal" style={{ width: '100%', padding: '6px', fontSize: '0.78rem', background: 'var(--green)' }}>
+                              Mark Delivered ✔
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {activeTab === 'daily-sales' && (
-        <section>
-          <div className="admin-header">
+      {/* 2. DAILY SALES INSPECTOR */}
+      {activeTab === 'daily_sales' && (
+        <div style={{ background: '#FFF', borderRadius: 'var(--radius)', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
             <div>
-              <h2>Daily Sales</h2>
-              <p className="modal-subtitle">Inspect transactions and item performance by date.</p>
+              <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 900 }}>Daily Financial Sales Inspector</h3>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text2)' }}>Inspect daily revenue, orders count, and payment method breakdowns.</p>
             </div>
-            <label className="input-group">
-              <Calendar size={16} />
-              <input className="date-input" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
-            </label>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: 700 }}>Select Date:</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                style={{ padding: '8px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontWeight: 700 }}
+              />
+            </div>
           </div>
 
-          <div className="admin-metrics">
-            <KpiCard icon={TrendingUp} label="Revenue" value={`GBP ${dailySalesData.dayRevenue.toFixed(2)}`} />
-            <KpiCard icon={ShoppingBag} label="Orders" value={dailySalesData.dayOrders.length.toString()} />
-            <KpiCard icon={Truck} label="Delivery" value={dailySalesData.deliveryCount.toString()} />
-            <KpiCard icon={ShoppingBag} label="Collection" value={dailySalesData.collectionCount.toString()} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius-sm)' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)' }}>Selected Day Revenue</span>
+              <p style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.5rem', color: 'var(--red)', marginTop: '4px' }}>£{dailyRevenue.toFixed(2)}</p>
+            </div>
+            <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius-sm)' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)' }}>Selected Day Orders</span>
+              <p style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.5rem', marginTop: '4px' }}>{dailySalesOrders.length}</p>
+            </div>
           </div>
 
-          {dailySalesData.topItems.length > 0 && (
-            <div className="dashboard-card" style={{ marginBottom: 20 }}>
-              <h4>Top sellers</h4>
-              <div className="card-meta">
-                {dailySalesData.topItems.map(([name, qty], index) => (
-                  <span key={name}>{index + 1}. {name} - {qty} sold</span>
+          {/* Orders Table */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-alt)', textAlign: 'left', borderBottom: '2px solid var(--border)' }}>
+                  <th style={{ padding: '12px' }}>Order #</th>
+                  <th style={{ padding: '12px' }}>Time</th>
+                  <th style={{ padding: '12px' }}>Customer</th>
+                  <th style={{ padding: '12px' }}>Type</th>
+                  <th style={{ padding: '12px' }}>Payment</th>
+                  <th style={{ padding: '12px' }}>Status</th>
+                  <th style={{ padding: '12px', textAlign: 'right' }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailySalesOrders.map((o, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '12px', fontWeight: 800 }}>#{o.orderNumber}</td>
+                    <td style={{ padding: '12px', color: 'var(--text2)' }}>{o.orderTime || o.createdAt}</td>
+                    <td style={{ padding: '12px', fontWeight: 700 }}>{o.customerName}</td>
+                    <td style={{ padding: '12px' }}>{o.orderType === 'delivery' ? '🚚 Delivery' : '🏪 Collection'}</td>
+                    <td style={{ padding: '12px', textTransform: 'uppercase', fontWeight: 700 }}>{o.paymentMethod}</td>
+                    <td style={{ padding: '12px' }}>
+                      <span className={`status-badge status-${(o.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>
+                        {o.orderStatus || 'Completed'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 900, color: 'var(--red)' }}>£{o.total?.toFixed(2)}</td>
+                  </tr>
                 ))}
-              </div>
-            </div>
-          )}
-
-          <OrdersTable
-            orders={dailySalesData.dayOrders}
-            onStatusChange={handleStatusChange}
-            onView={setSelectedOrderForDetail}
-            onPrint={setSelectedOrderForPrint}
-          />
-        </section>
-      )}
-
-      {activeTab === 'reviews' && <ReviewsManager isAdmin showToast={showToast} />}
-
-      {selectedOrderForDetail && (
-        <div className="modal-overlay" onClick={() => setSelectedOrderForDetail(null)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Order #{selectedOrderForDetail.orderNumber}</h3>
-              <button className="close-btn" type="button" onClick={() => setSelectedOrderForDetail(null)}><X size={18} /></button>
-            </div>
-            <div className="modal-body">
-              <div className="profile-detail-card">
-                <p><strong>Customer:</strong> {selectedOrderForDetail.customerName}</p>
-                <p><strong>Phone:</strong> {selectedOrderForDetail.customerPhone}</p>
-                <p><strong>Email:</strong> {selectedOrderForDetail.customerEmail}</p>
-                <p><strong>Address:</strong> {selectedOrderForDetail.deliveryAddress}</p>
-                <p><strong>Payment:</strong> {selectedOrderForDetail.paymentMethod}</p>
-              </div>
-              <div className="receipt-section">
-                {selectedOrderForDetail.items?.map((item, index) => (
-                  <div key={`${item.id || getOrderItemName(item)}-${index}`} className="receipt-row">
-                    <span>{item.quantity}x {getOrderItemName(item)}</span>
-                    <span>GBP {(getOrderItemUnitPrice(item) * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
-                <div className="receipt-total-row">
-                  <span>Total</span>
-                  <span>GBP {selectedOrderForDetail.total?.toFixed(2) || '0.00'}</span>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button
-                className="btn-submit-modal"
-                type="button"
-                onClick={() => {
-                  setSelectedOrderForPrint(selectedOrderForDetail);
-                  setSelectedOrderForDetail(null);
-                }}
-              >
-                <Printer size={16} /> Print Receipt
-              </button>
-            </div>
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
+      {/* 3. REVIEWS & COMPLAINTS TAB */}
+      {activeTab === 'reviews' && (
+        <ReviewsManager isAdmin={true} showToast={showToast} />
+      )}
+
+      {/* thermal receipt modal */}
       <PrintReceiptModal
-        isOpen={Boolean(selectedOrderForPrint)}
-        onClose={() => setSelectedOrderForPrint(null)}
-        order={selectedOrderForPrint}
+        isOpen={!!printModalOrder}
+        onClose={() => setPrintModalOrder(null)}
+        order={printModalOrder}
       />
-    </main>
-  );
-}
-
-function KpiCard({ icon: Icon, label, value }) {
-  return (
-    <article className="metric-card">
-      <p className="metric-label">{label}</p>
-      <p className="metric-value">{value}</p>
-      <svg className="sparkline" viewBox="0 0 120 30" aria-hidden="true">
-        <polyline points="2,22 22,18 42,20 62,10 82,13 102,5 118,8" />
-      </svg>
-      <Icon className="gold-text" size={20} />
-    </article>
-  );
-}
-
-function OrdersTable({ orders, onStatusChange, onView, onPrint }) {
-  if (orders.length === 0) return <div className="empty-state">No orders for this view.</div>;
-
-  return (
-    <div className="admin-table-wrap">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Order</th>
-            <th>Time</th>
-            <th>Type</th>
-            <th>Customer</th>
-            <th>Items</th>
-            <th>Total</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((order, index) => (
-            <tr key={order.id || index}>
-              <td><strong>#{order.orderNumber}</strong></td>
-              <td>{order.orderTime || (order.createdAt ? new Date(order.createdAt).toLocaleString('en-GB') : 'Just now')}</td>
-              <td><span className="status-badge status-placed">{order.orderType}</span></td>
-              <td>
-                <strong>{order.customerName || 'Customer'}</strong>
-                <p className="cart-line-meta">{order.customerPhone}</p>
-              </td>
-              <td>{order.items?.length || 0}</td>
-              <td><strong className="gold-text">GBP {order.total?.toFixed(2) || '0.00'}</strong></td>
-              <td><span className={`status-badge ${STATUS_CLASS[order.orderStatus] || 'status-placed'}`}>{order.orderStatus}</span></td>
-              <td>
-                <div className="receipt-actions">
-                  <select value={order.orderStatus} onChange={(event) => onStatusChange(order.id, event.target.value)} aria-label="Update status">
-                    {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                  <button className="btn-back" type="button" onClick={() => onView(order)} aria-label="View order"><Eye size={15} /></button>
-                  <button className="btn-back" type="button" onClick={() => onPrint(order)} aria-label="Print order"><Printer size={15} /></button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
-
-AdminDashboard.propTypes = {
-  showToast: PropTypes.func,
-  adminUser: PropTypes.object,
-  onExit: PropTypes.func.isRequired
-};
-
-KpiCard.propTypes = {
-  icon: PropTypes.elementType.isRequired,
-  label: PropTypes.string.isRequired,
-  value: PropTypes.string.isRequired
-};
-
-OrdersTable.propTypes = {
-  orders: PropTypes.array.isRequired,
-  onStatusChange: PropTypes.func.isRequired,
-  onView: PropTypes.func.isRequired,
-  onPrint: PropTypes.func.isRequired
-};
