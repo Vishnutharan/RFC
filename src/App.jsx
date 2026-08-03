@@ -168,18 +168,20 @@ export default function App() {
   return (
     <ThemeProvider>
       <div className="app-container">
-      <Header
-        cartCount={cart.cartCount}
-        orderMode={orderMode}
-        setOrderMode={setOrderMode}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenCustomerDashboard={() => setIsCustomerDashboardOpen(true)}
-        isAdminView={isAdminView}
-        adminUser={adminUser}
-        onStaffPanelClick={handleStaffPanelClick}
-      />
+      {!isAdminView && !isCustomerDashboardOpen && (
+        <Header
+          cartCount={cart.cartCount}
+          orderMode={orderMode}
+          setOrderMode={setOrderMode}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          onOpenCart={() => setIsCartOpen(true)}
+          onOpenCustomerDashboard={() => setIsCustomerDashboardOpen(true)}
+          isAdminView={isAdminView}
+          adminUser={adminUser}
+          onStaffPanelClick={handleStaffPanelClick}
+        />
+      )}
 
       {isAdminView && adminUser ? (
         <ErrorBoundary title="Staff dashboard failed">

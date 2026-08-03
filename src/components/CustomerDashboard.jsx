@@ -3,7 +3,8 @@ import confetti from 'canvas-confetti';
 import { 
   X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, 
   Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle, 
-  Camera, Upload, Image, Star, ShieldCheck, Heart, Award, ArrowLeft
+  Camera, Upload, Image, Star, ShieldCheck, Heart, Award, ArrowLeft, Clock, Copy,
+  Eye, EyeOff, ArrowRight, CheckCircle2
 } from 'lucide-react';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
@@ -34,6 +35,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   const [authMode, setAuthMode] = useState('none'); // 'none', 'login', 'register'
   const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', phone: '', address: '', postcode: '' });
   const [authError, setAuthError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -212,203 +214,428 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', width: '100%' }}>
-      {/* Header Bar */}
-      <div style={{ background: '#FFF', borderBottom: '1px solid var(--border)', padding: '16px 20px', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ maxWidth: '1320px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--text)', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer' }}>
-            <ArrowLeft size={20} /> Back to Menu
+    <div style={{ height: '100vh', maxHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', width: '100%', overflow: 'hidden' }}>
+      {/* Top Dashboard Header Bar */}
+      <div style={{ background: '#FFF', borderBottom: '1px solid var(--border)', padding: '0 24px', height: '58px', flexShrink: 0, zIndex: 10, display: 'flex', alignItems: 'center', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ maxWidth: '1400px', width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-alt)', border: '1px solid var(--border)', color: 'var(--text)', fontWeight: 800, fontSize: '0.88rem', cursor: 'pointer', padding: '6px 14px', borderRadius: 'var(--radius-full)', transition: 'all 0.15s ease' }}>
+            <ArrowLeft size={16} /> Back to Menu
           </button>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', boxShadow: '0 0 8px var(--green)' }}></div>
+            <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.1rem', color: 'var(--text)', letterSpacing: '-0.2px' }}>RFC Customer Portal</span>
+          </div>
+
           {authMode === 'none' && (
-            <button onClick={() => setAuthMode('login')} className="btn-add-item" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+            <button onClick={() => setAuthMode('login')} className="mode-btn" style={{ padding: '6px 16px', fontSize: '0.85rem', border: '1px solid var(--border)', background: '#FFF' }}>
               Switch Account
             </button>
           )}
         </div>
       </div>
 
-      <main className="customer-dashboard-container" style={{ maxWidth: '1320px', margin: '24px auto', padding: '0 20px' }}>
+      <main className="customer-dashboard-container" style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: '1400px', margin: '0 auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxSizing: 'border-box' }}>
         
         {authMode !== 'none' ? (
-          <div style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', padding: '40px', maxWidth: '500px', margin: '40px auto', boxShadow: 'var(--shadow-sm)' }}>
-            <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', fontWeight: 900, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-              <Lock size={24} color="var(--red)" />
-              {authMode === 'login' ? 'Sign In' : 'Create Account'}
-            </h4>
-
-            {authError && (
-              <div style={{ padding: '12px 16px', borderRadius: 'var(--radius-sm)', background: 'var(--red-light)', border: '1px solid #FEE2E2', color: 'var(--red)', fontSize: '0.9rem', fontWeight: 700, marginBottom: '20px' }}>
-                ⚠️ {authError}
-              </div>
-            )}
-
-            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {authMode === 'register' && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 0', minHeight: 0, overflowY: 'auto' }}>
+            <div style={{
+              background: '#FFF',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow-lg)',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              maxWidth: '900px',
+              width: '100%',
+              overflow: 'hidden'
+            }}>
+              {/* Left Brand Hero Panel */}
+              <div style={{
+                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 40%, var(--red) 100%)',
+                padding: '36px 32px',
+                color: '#FFF',
+                display: 'flex',
+                flexDirection: 'column',
+                justify: 'space-between',
+                position: 'relative'
+              }}>
                 <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px', display: 'block' }}>Full Name</label>
-                  <div className="input-group"><User size={18} /><input placeholder="Full Name" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required style={{ padding: '12px' }} /></div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)', padding: '5px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 800, marginBottom: '24px', border: '1px solid rgba(255,255,255,0.18)' }}>
+                    <Sparkles size={14} color="var(--amber)" /> RFC WATFORD VIP CLUB
+                  </div>
+                  <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '2rem', fontWeight: 900, lineHeight: 1.2, margin: '0 0 14px 0', letterSpacing: '-0.5px' }}>
+                    Crispy Chicken.<br />Instant Rewards.
+                  </h2>
+                  <p style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5, margin: '0 0 28px 0' }}>
+                    Sign in to track orders live, earn 8-stamp loyalty rewards, and claim 15% OFF vouchers!
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {[
+                      { icon: Award, title: '8-Stamp Loyalty Club', desc: 'Earn 1 stamp per order & unlock 15% OFF.' },
+                      { icon: RotateCcw, title: '1-Click Express Reorder', desc: 'Reorder past feasts in seconds.' },
+                      { icon: ShieldCheck, title: 'Exclusive VIP Promos', desc: 'Access members-only discounts.' }
+                    ].map((f, i) => {
+                      const FIcon = f.icon;
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                          <div style={{ padding: '7px', background: 'rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', color: 'var(--amber)', flexShrink: 0, marginTop: '2px' }}>
+                            <FIcon size={16} />
+                          </div>
+                          <div>
+                            <strong style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800 }}>{f.title}</strong>
+                            <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)' }}>{f.desc}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px', display: 'block' }}>Email Address</label>
-                <div className="input-group"><Mail size={18} /><input type="email" placeholder="email@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required style={{ padding: '12px' }} /></div>
+
+                {/* Demo Credentials Fill Shortcut */}
+                <div style={{ marginTop: '28px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthForm({
+                        name: 'Vishnu Karun',
+                        email: 'vishnu@example.com',
+                        password: 'password123',
+                        phone: '+44 7700 900077',
+                        address: '37 Berry Avenue',
+                        postcode: 'WD24 6RU'
+                      });
+                      if (showToast) showToast('⚡ Demo credentials filled!');
+                    }}
+                    style={{
+                      width: '100%', padding: '9px 12px', background: 'rgba(255,255,255,0.12)', border: '1px dashed rgba(255,255,255,0.3)',
+                      borderRadius: 'var(--radius-sm)', color: '#FFF', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'all 0.2s'
+                    }}
+                  >
+                    ⚡ One-Click Fill Demo Credentials
+                  </button>
+                </div>
               </div>
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px', display: 'block' }}>Password</label>
-                <div className="input-group"><Lock size={18} /><input type="password" placeholder="••••••••" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} required style={{ padding: '12px' }} /></div>
+
+              {/* Right Form Panel */}
+              <div style={{ padding: '32px 28px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                
+                {/* Segmented Control Pill */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', background: 'var(--surface-alt)', padding: '4px', borderRadius: 'var(--radius-full)', marginBottom: '20px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('login'); setAuthError(''); }}
+                    style={{
+                      padding: '7px', borderRadius: 'var(--radius-full)', border: 'none',
+                      background: authMode === 'login' ? '#FFF' : 'transparent',
+                      color: authMode === 'login' ? 'var(--red)' : 'var(--text2)',
+                      fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
+                      boxShadow: authMode === 'login' ? 'var(--shadow-sm)' : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('register'); setAuthError(''); }}
+                    style={{
+                      padding: '7px', borderRadius: 'var(--radius-full)', border: 'none',
+                      background: authMode === 'register' ? '#FFF' : 'transparent',
+                      color: authMode === 'register' ? 'var(--red)' : 'var(--text2)',
+                      fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
+                      boxShadow: authMode === 'register' ? 'var(--shadow-sm)' : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Create Account
+                  </button>
+                </div>
+
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', fontWeight: 900, color: 'var(--text)', margin: '0 0 4px 0' }}>
+                  {authMode === 'login' ? 'Welcome Back!' : 'Create Account'}
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text2)', margin: '0 0 16px 0' }}>
+                  {authMode === 'login' ? 'Please enter your account details below.' : 'Fill in your details to start earning stamps.'}
+                </p>
+
+                {authError && (
+                  <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', background: 'var(--red-light)', border: '1px solid #FEE2E2', color: 'var(--red)', fontSize: '0.85rem', fontWeight: 700, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={15} /> {authError}
+                  </div>
+                )}
+
+                <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {authMode === 'register' && (
+                    <div>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Full Name</label>
+                      <div className="input-group"><User size={15} /><input placeholder="Vishnu Karun" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Email Address</label>
+                    <div className="input-group"><Mail size={15} /><input type="email" placeholder="vishnu@example.com" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} required style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Password</label>
+                    <div className="input-group" style={{ position: 'relative' }}>
+                      <Lock size={15} />
+                      <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} required style={{ padding: '9px 36px 9px 12px', fontSize: '0.88rem', width: '100%' }} />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', display: 'flex' }}>
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {authMode === 'register' && (
+                    <>
+                      <div>
+                        <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Phone Number</label>
+                        <div className="input-group"><Phone size={15} /><input placeholder="+44 7700 900077" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Street Address</label>
+                          <div className="input-group"><MapPin size={15} /><input placeholder="37 Berry Avenue" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.78rem', fontWeight: 800, marginBottom: '4px', display: 'block', color: 'var(--text)' }}>Postcode</label>
+                          <div className="input-group"><MapPin size={15} /><input placeholder="WD24 6RU" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value.toUpperCase() })} style={{ padding: '9px 12px', fontSize: '0.88rem' }} /></div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="btn-submit-modal"
+                    style={{
+                      padding: '11px', fontSize: '0.95rem', fontWeight: 900, marginTop: '6px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                      boxShadow: 'var(--shadow-red)'
+                    }}
+                  >
+                    {authMode === 'login' ? 'Sign In' : 'Create Account'} <ArrowRight size={16} />
+                  </button>
+                </form>
+
+                <div style={{ textAlign: 'center', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-light)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('none')}
+                    style={{ background: 'none', border: 'none', color: 'var(--text2)', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Continue as Guest Customer →
+                  </button>
+                </div>
               </div>
-              {authMode === 'register' && (
-                <>
-                  <div>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px', display: 'block' }}>Phone Number</label>
-                    <div className="input-group"><Phone size={18} /><input placeholder="+44 7123 456789" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} style={{ padding: '12px' }} /></div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px', display: 'block' }}>Street Address</label>
-                    <div className="input-group"><MapPin size={18} /><input placeholder="37 Berry Avenue" value={authForm.address} onChange={(e) => setAuthForm({ ...authForm, address: e.target.value })} style={{ padding: '12px' }} /></div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px', display: 'block' }}>Postcode</label>
-                    <div className="input-group"><MapPin size={18} /><input placeholder="WD24 6RU" value={authForm.postcode} onChange={(e) => setAuthForm({ ...authForm, postcode: e.target.value })} style={{ padding: '12px' }} /></div>
-                  </div>
-                </>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
-                <button type="submit" className="btn-submit-modal" style={{ padding: '14px', fontSize: '1.05rem' }}>{authMode === 'login' ? 'Sign In' : 'Register'}</button>
-                <button type="button" className="mode-btn" onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} style={{ border: '1px solid var(--border)', padding: '12px' }}>{authMode === 'login' ? 'Need an account? Register' : 'Already have one? Sign In'}</button>
-              </div>
-            </form>
+            </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px' }}>
+          <div className="portal-grid" style={{ display: 'grid', gridTemplateColumns: '290px 1fr', gap: '20px', height: '100%', minHeight: 0, overflow: 'hidden' }}>
             <style>{`
-              @media (min-width: 900px) {
-                .portal-grid { display: grid; grid-template-columns: 300px 1fr; gap: 32px; align-items: start; }
+              @media (max-width: 899px) {
+                .portal-grid { display: flex !important; flex-direction: column !important; overflow-y: auto !important; }
+                .customer-dashboard-container { overflow-y: auto !important; }
               }
             `}</style>
-            
-            <div className="portal-grid">
-              {/* Left Sidebar */}
-              <aside style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                {/* Profile Card */}
-                <div style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                    <div style={{ position: 'relative', marginBottom: '16px' }}>
-                      <div style={{ padding: '4px', background: 'linear-gradient(135deg, var(--red), var(--amber))', borderRadius: '50%' }}>
-                        {renderUserAvatar(96)}
-                      </div>
-                      <div style={{ position: 'absolute', bottom: 6, right: 6, width: 20, height: 20, background: 'var(--green)', borderRadius: '50%', border: '3px solid #FFF', title: 'Online' }}></div>
+
+            {/* Left Sidebar */}
+            <aside style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+              
+              {/* Profile Summary Header */}
+              <div style={{ padding: '14px 16px', background: 'linear-gradient(135deg, var(--red-light), #FFF)', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div style={{ padding: '2px', background: 'linear-gradient(135deg, var(--red), var(--amber))', borderRadius: '50%' }}>
+                      {renderUserAvatar(46)}
                     </div>
-                    
-                    <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: 'var(--text)' }}>
-                      {currentUser?.name || 'Customer'}
-                    </h3>
-                    
+                    <div style={{ position: 'absolute', bottom: 1, right: 1, width: 10, height: 10, background: 'var(--green)', borderRadius: '50%', border: '2px solid #FFF' }}></div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.05rem', fontWeight: 900, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {currentUser?.name || 'Customer'}
+                      </h3>
+                    </div>
                     {currentUser?.name && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--amber)', color: '#FFF', padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 800, marginTop: '8px' }}>
-                        <Star size={12} fill="#FFF" /> {loyaltyCount >= 8 ? 'GOLD VIP' : loyaltyCount >= 4 ? 'SILVER VIP' : 'BRONZE VIP'}
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--amber)', color: '#FFF', padding: '1px 7px', borderRadius: 'var(--radius-full)', fontSize: '0.68rem', fontWeight: 800, marginTop: '2px' }}>
+                        <Star size={9} fill="#FFF" /> {loyaltyCount >= 8 ? 'GOLD VIP' : loyaltyCount >= 4 ? 'SILVER VIP' : 'BRONZE VIP'}
                       </div>
                     )}
-                    
-                    <p style={{ fontSize: '0.9rem', color: 'var(--text2)', marginTop: '12px', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                      <MapPin size={14} /> {currentUser?.address || 'Update address'}
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text2)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <MapPin size={11} style={{ flexShrink: 0 }} /> {currentUser?.address || 'Update address'}
                     </p>
-                  </div>
-
-                  {/* Quick Stats */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Orders</span>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text)', fontFamily: 'var(--font-head)' }}>{orders.length}</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Stamps</span>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text)', fontFamily: 'var(--font-head)' }}>{loyaltyCount}/8</div>
-                    </div>
                   </div>
                 </div>
 
-                {/* Navigation Tabs */}
-                <div style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-                  {TABS.map(t => {
-                    const Icon = t.icon;
-                    const isActive = activeTab === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => setActiveTab(t.id)}
-                        style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          width: '100%', padding: '16px 20px',
-                          background: isActive ? 'var(--red-light)' : '#FFF',
-                          border: 'none', borderLeft: isActive ? '4px solid var(--red)' : '4px solid transparent',
-                          borderBottom: '1px solid var(--border)',
-                          cursor: 'pointer', transition: 'all 0.2s',
-                          color: isActive ? 'var(--red)' : 'var(--text)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: isActive ? 800 : 600, fontSize: '0.95rem' }}>
-                          <Icon size={18} /> {t.label}
+                {/* Quick Stats Dual Strip */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '10px', padding: '6px 10px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Orders</span>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--red)', fontFamily: 'var(--font-head)' }}>{orders.length}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderLeft: '1px solid var(--border)', paddingLeft: '6px' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Stamps</span>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--amber)', fontFamily: 'var(--font-head)' }}>{loyaltyCount}/8</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation Menu Section */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '6px 0' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.8px', padding: '8px 16px 4px' }}>
+                  Portal Menu
+                </div>
+
+                {TABS.map(t => {
+                  const Icon = t.icon;
+                  const isActive = activeTab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setActiveTab(t.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        margin: '2px 8px', padding: '9px 12px', borderRadius: 'var(--radius-sm)',
+                        background: isActive ? 'var(--red-light)' : 'transparent',
+                        border: 'none',
+                        cursor: 'pointer', transition: 'all 0.15s ease',
+                        color: isActive ? 'var(--red)' : 'var(--text)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: isActive ? 800 : 600, fontSize: '0.88rem' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: isActive ? '#FFF' : 'var(--surface-alt)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--red)' : 'var(--text2)' }}>
+                          <Icon size={16} />
                         </div>
-                        {t.count && <span style={{ background: isActive ? '#FFF' : 'var(--surface)', color: isActive ? 'var(--red)' : 'var(--text2)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 800 }}>{t.count}</span>}
-                      </button>
-                    );
-                  })}
+                        {t.label}
+                      </div>
+                      {t.count && <span style={{ background: isActive ? '#FFF' : 'var(--surface-alt)', color: isActive ? 'var(--red)' : 'var(--text2)', padding: '2px 7px', borderRadius: 'var(--radius-full)', fontSize: '0.7rem', fontWeight: 800 }}>{t.count}</span>}
+                    </button>
+                  );
+                })}
+
+                <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.8px', padding: '8px 16px 4px', borderTop: '1px solid var(--border-light)' }}>
+                    Account & System
+                  </div>
+                  
+                  <button
+                    onClick={() => setAuthMode('login')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 8px', padding: '9px 12px',
+                      background: 'transparent', border: 'none', borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer', color: 'var(--text2)', fontWeight: 600, fontSize: '0.88rem',
+                      width: 'calc(100% - 16px)'
+                    }}
+                  >
+                    <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--surface-alt)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)' }}>
+                      <Lock size={15} />
+                    </div>
+                    Switch Account
+                  </button>
+
                   <button
                     onClick={handleLogout}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '12px', width: '100%', padding: '16px 20px',
-                      background: '#FFF', border: 'none', borderLeft: '4px solid transparent',
-                      cursor: 'pointer', color: 'var(--red)', fontWeight: 700, fontSize: '0.95rem'
+                      display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 8px 8px', padding: '9px 12px',
+                      background: 'var(--red-light)', border: 'none', borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer', color: 'var(--red)', fontWeight: 700, fontSize: '0.88rem',
+                      width: 'calc(100% - 16px)'
                     }}
                   >
-                    <LogOut size={18} /> Log Out
+                    <div style={{ width: 28, height: 28, borderRadius: 6, background: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}>
+                      <LogOut size={15} />
+                    </div>
+                    Log Out
                   </button>
                 </div>
-              </aside>
+              </div>
+            </aside>
 
-              {/* Right Content Panel */}
-              <div style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', padding: '32px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', minHeight: '600px' }}>
+            {/* Right Content Panel */}
+            <div style={{ background: '#FFF', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+              {/* Content Panel Header */}
+              <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFF', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {(() => {
+                    const currentTabObj = TABS.find(t => t.id === activeTab);
+                    const TabIcon = currentTabObj?.icon || ShoppingBag;
+                    return (
+                      <>
+                        <div style={{ padding: '8px', background: 'var(--red-light)', borderRadius: 'var(--radius-sm)', color: 'var(--red)', display: 'flex' }}>
+                          <TabIcon size={18} />
+                        </div>
+                        <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900, color: 'var(--text)', margin: 0 }}>
+                          {currentTabObj?.label || 'My Orders'}
+                        </h2>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {activeTab === 'orders' && orders.length > 0 && (
+                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text2)', background: 'var(--surface-alt)', padding: '4px 12px', borderRadius: 'var(--radius-full)' }}>
+                      {orders.length} {orders.length === 1 ? 'Order' : 'Orders'} Total
+                    </span>
+                  )}
+                  {activeTab === 'profile' && (
+                    <button onClick={() => setIsEditingProfile(!isEditingProfile)} className="btn-add-item" style={{ padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Edit3 size={14} /> {isEditingProfile ? 'Cancel Editing' : 'Edit Profile'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Content Panel Body (Inner Scroll) */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minHeight: 0 }}>
                 
                 {activeTab === 'orders' && (
                   <div>
-                    <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900, marginBottom: '24px', borderBottom: '2px solid var(--border)', paddingBottom: '16px' }}>My Orders</h2>
-                    
                     {orders.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--surface)', borderRadius: 'var(--radius-lg)' }}>
-                        <ShoppingBag size={64} strokeWidth={1} style={{ marginBottom: '16px', color: 'var(--red)' }} />
-                        <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 800, color: 'var(--text)' }}>No Orders Placed Yet</h4>
-                        <p style={{ fontSize: '0.95rem', color: 'var(--text2)', marginTop: '8px' }}>Order your favourite RFC crispy chicken to earn loyalty points!</p>
+                      <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border)' }}>
+                        <ShoppingBag size={52} strokeWidth={1.2} style={{ marginBottom: '12px', color: 'var(--red)' }} />
+                        <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 800, color: 'var(--text)', margin: 0 }}>No Orders Placed Yet</h4>
+                        <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginTop: '6px', marginBottom: '20px' }}>Order your favourite RFC crispy chicken to earn loyalty points!</p>
+                        <button onClick={onClose} className="btn-add-item" style={{ padding: '10px 24px', fontSize: '0.88rem' }}>
+                          Browse Menu & Order
+                        </button>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                         {orders.map((ord, i) => (
-                          <div key={ord.id || i} style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+                          <div key={ord.id || i} style={{ background: '#FFF', borderRadius: 'var(--radius)', padding: '18px 20px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
                               <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-                                  <span style={{ fontWeight: 900, fontSize: '1.2rem', fontFamily: 'var(--font-head)' }}>Order #{ord.orderNumber}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                                  <span style={{ fontWeight: 900, fontSize: '1.1rem', fontFamily: 'var(--font-head)' }}>Order #{ord.orderNumber}</span>
                                   <span className={`status-badge status-${(ord.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>{ord.orderStatus || 'Completed'}</span>
                                 </div>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--text3)', fontWeight: 600 }}>🕒 {ord.orderTime || (ord.createdAt ? new Date(ord.createdAt).toLocaleString('en-GB') : 'Today')}</p>
+                                <p style={{ fontSize: '0.82rem', color: 'var(--text3)', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <Clock size={13} color="var(--text3)" /> {ord.orderTime || (ord.createdAt ? new Date(ord.createdAt).toLocaleString('en-GB') : 'Today')}
+                                </p>
                                 
-                                <div style={{ marginTop: '12px', fontSize: '0.9rem', color: 'var(--text)' }}>
-                                  <strong>Items:</strong> {ord.items ? ord.items.map(item => `${item.quantity}x ${item.name}`).join(', ') : 'Details unavailable'}
+                                <div style={{ marginTop: '10px', fontSize: '0.88rem', color: 'var(--text)' }}>
+                                  <strong style={{ color: 'var(--text2)' }}>Items:</strong> {ord.items ? ord.items.map(item => `${item.quantity}x ${item.name}`).join(', ') : 'Details unavailable'}
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.5rem', color: 'var(--red)' }}>£{ord.total?.toFixed(2) || '0.00'}</span>
+                                <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.35rem', color: 'var(--red)' }}>£{ord.total?.toFixed(2) || '0.00'}</span>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                              <button onClick={() => onPrintReceipt && onPrintReceipt(ord)} className="mode-btn" style={{ border: '1px solid var(--border)', padding: '8px 16px', fontSize: '0.85rem' }}><Printer size={16} /> Print Receipt</button>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '2px', paddingTop: '10px', borderTop: '1px solid var(--border-light)' }}>
+                              <button onClick={() => onPrintReceipt && onPrintReceipt(ord)} className="mode-btn" style={{ border: '1px solid var(--border)', padding: '6px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Printer size={14} /> Print Receipt</button>
                               
-                              {/* Show Cancel if not completed/cancelled */}
                               {!['completed', 'cancelled', 'delivered'].includes((ord.orderStatus || '').toLowerCase()) && (
-                                <button onClick={() => setCancelModalOrder(ord)} className="mode-btn" style={{ border: '1px solid var(--red)', color: 'var(--red)', padding: '8px 16px', fontSize: '0.85rem', background: '#FFF' }}><X size={16} /> Cancel</button>
+                                <button onClick={() => setCancelModalOrder(ord)} className="mode-btn" style={{ border: '1px solid var(--red)', color: 'var(--red)', padding: '6px 14px', fontSize: '0.82rem', background: '#FFF', display: 'flex', alignItems: 'center', gap: '6px' }}><X size={14} /> Cancel</button>
                               )}
                               
-                              <button onClick={() => onReorder && onReorder(ord)} className="btn-add-item" style={{ padding: '8px 20px', fontSize: '0.9rem' }}><RotateCcw size={16} /> Reorder</button>
+                              <button onClick={() => onReorder && onReorder(ord)} className="btn-add-item" style={{ padding: '6px 16px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}><RotateCcw size={14} /> Reorder</button>
                             </div>
                           </div>
                         ))}
@@ -419,62 +646,55 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                 {activeTab === 'profile' && (
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '2px solid var(--border)', paddingBottom: '16px' }}>
-                      <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900 }}>Profile Settings</h2>
-                      <button onClick={() => setIsEditingProfile(!isEditingProfile)} className="btn-add-item" style={{ padding: '8px 20px', fontSize: '0.9rem' }}>
-                        <Edit3 size={16} /> {isEditingProfile ? 'Cancel Editing' : 'Edit Profile'}
-                      </button>
-                    </div>
-
                     {!isEditingProfile ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px' }}>
-                        <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Full Name</span>
-                          <p style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: '4px' }}>{currentUser?.name || '-'}</p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                        <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Full Name</span>
+                          <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.name || '-'}</p>
                         </div>
-                        <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Email Address</span>
-                          <p style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: '4px' }}>{currentUser?.email || '-'}</p>
+                        <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Email Address</span>
+                          <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.email || '-'}</p>
                         </div>
-                        <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Phone Number</span>
-                          <p style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: '4px' }}>{currentUser?.phone || '-'}</p>
+                        <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Phone Number</span>
+                          <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.phone || '-'}</p>
                         </div>
-                        <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Street Address</span>
-                          <p style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: '4px' }}>{currentUser?.address || '-'}</p>
+                        <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Street Address</span>
+                          <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.address || '-'}</p>
                         </div>
-                        <div style={{ background: 'var(--surface)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Postcode</span>
-                          <p style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: '4px' }}>{currentUser?.postcode || '-'}</p>
+                        <div style={{ background: 'var(--surface-alt)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text3)', textTransform: 'uppercase' }}>Postcode</span>
+                          <p style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '4px', margin: 0 }}>{currentUser?.postcode || '-'}</p>
                         </div>
                       </div>
                     ) : (
-                      <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                        <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
-                          <label style={{ fontSize: '1rem', fontWeight: 900, marginBottom: '16px', display: 'block' }}>Profile Avatar</label>
-                          <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <div style={{ position: 'relative', cursor: 'pointer', width: 96, height: 96 }} onClick={() => fileInputRef.current?.click()}>
+                      <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        <div style={{ background: 'var(--surface-alt)', padding: '18px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+                          <label style={{ fontSize: '0.9rem', fontWeight: 900, marginBottom: '12px', display: 'block' }}>Profile Avatar</label>
+                          <div style={{ display: 'flex', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ position: 'relative', cursor: 'pointer', width: 64, height: 64 }} onClick={() => fileInputRef.current?.click()}>
                               {profileForm.avatarUrl ? (
-                                <img src={profileForm.avatarUrl} alt="Preview" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }} />
+                                <img src={profileForm.avatarUrl} alt="Preview" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }} />
                               ) : profileForm.avatarPreset ? (
-                                <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'linear-gradient(135deg, var(--red), var(--amber))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '42px', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }}>
+                                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, var(--red), var(--amber))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }}>
                                   {AVATAR_PRESETS.find(p => p.id === profileForm.avatarPreset)?.label.split(' ')[0] || '👑'}
                                 </div>
                               ) : (
-                                <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--border)', color: 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 900, border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }}>
+                                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--border)', color: 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 900, border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }}>
                                   {profileForm.name ? profileForm.name.charAt(0).toUpperCase() : 'U'}
                                 </div>
                               )}
-                              <div style={{ position: 'absolute', bottom: -4, right: -4, background: 'var(--red)', borderRadius: '50%', padding: '8px', color: '#FFF', boxShadow: 'var(--shadow-sm)' }}>
-                                <Camera size={16} />
+                              <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--red)', borderRadius: '50%', padding: '5px', color: '#FFF', boxShadow: 'var(--shadow-sm)' }}>
+                                <Camera size={12} />
                               </div>
                             </div>
                             <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
                             
-                            <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '24px' }}>
-                              <p style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '12px' }}>Or choose a preset:</p>
-                              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '18px' }}>
+                              <p style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px', margin: 0 }}>Or choose a preset:</p>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
                                 {AVATAR_PRESETS.map(preset => (
                                   <button 
                                     key={preset.id} 
@@ -482,11 +702,11 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                                     onClick={() => selectPreset(preset.id)} 
                                     title={preset.label}
                                     style={{ 
-                                      width: 48, height: 48, borderRadius: '50%', fontSize: '20px', 
+                                      width: 38, height: 38, borderRadius: '50%', fontSize: '16px', 
                                       background: profileForm.avatarPreset === preset.id ? 'var(--red-light)' : '#FFF', 
                                       border: profileForm.avatarPreset === preset.id ? '2px solid var(--red)' : '1px solid var(--border)', 
                                       display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                      cursor: 'pointer', transition: 'all 0.2s', boxShadow: 'var(--shadow-sm)' 
+                                      cursor: 'pointer', transition: 'all 0.15s', boxShadow: 'var(--shadow-sm)' 
                                     }}
                                   >
                                     {preset.label.split(' ')[0]}
@@ -497,31 +717,31 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                           </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', background: 'var(--surface)', padding: '24px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', background: 'var(--surface-alt)', padding: '18px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)' }}>
                           <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '6px', display: 'block' }}>Full Name</label>
-                            <div className="input-group"><User size={18} /><input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} required style={{ padding: '12px' }} /></div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Full Name</label>
+                            <div className="input-group"><User size={15} /><input value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} required style={{ padding: '8px 12px', fontSize: '0.88rem' }} /></div>
                           </div>
                           <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '6px', display: 'block' }}>Email Address</label>
-                            <div className="input-group"><Mail size={18} /><input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} required style={{ padding: '12px' }} /></div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Email Address</label>
+                            <div className="input-group"><Mail size={15} /><input value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} required style={{ padding: '8px 12px', fontSize: '0.88rem' }} /></div>
                           </div>
                           <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '6px', display: 'block' }}>Phone Number</label>
-                            <div className="input-group"><Phone size={18} /><input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} required style={{ padding: '12px' }} /></div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Phone Number</label>
+                            <div className="input-group"><Phone size={15} /><input value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} required style={{ padding: '8px 12px', fontSize: '0.88rem' }} /></div>
                           </div>
                           <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '6px', display: 'block' }}>Street Address</label>
-                            <div className="input-group"><MapPin size={18} /><input value={profileForm.address} onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })} required style={{ padding: '12px' }} /></div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Street Address</label>
+                            <div className="input-group"><MapPin size={15} /><input value={profileForm.address} onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })} required style={{ padding: '8px 12px', fontSize: '0.88rem' }} /></div>
                           </div>
                           <div>
-                            <label style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '6px', display: 'block' }}>Postcode</label>
-                            <div className="input-group"><MapPin size={18} /><input value={profileForm.postcode} onChange={(e) => setProfileForm({ ...profileForm, postcode: e.target.value.toUpperCase() })} required style={{ padding: '12px' }} /></div>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 800, marginBottom: '4px', display: 'block' }}>Postcode</label>
+                            <div className="input-group"><MapPin size={15} /><input value={profileForm.postcode} onChange={(e) => setProfileForm({ ...profileForm, postcode: e.target.value.toUpperCase() })} required style={{ padding: '8px 12px', fontSize: '0.88rem' }} /></div>
                           </div>
                         </div>
                         
                         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <button type="submit" className="btn-submit-modal" style={{ padding: '12px 32px', fontSize: '1rem' }}><Save size={18} /> Save Changes</button>
+                          <button type="submit" className="btn-submit-modal" style={{ padding: '10px 24px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Save size={15} /> Save Changes</button>
                         </div>
                       </form>
                     )}
@@ -530,29 +750,27 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                 {activeTab === 'loyalty' && (
                   <div>
-                    <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900, marginBottom: '24px', borderBottom: '2px solid var(--border)', paddingBottom: '16px' }}>Loyalty Rewards</h2>
-                    
-                    <div style={{ background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)', borderRadius: 'var(--radius-xl)', padding: '40px', border: '1px solid #FDE2E2', textAlign: 'center', marginBottom: '32px' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: loyaltyCount >= 8 ? 'var(--amber)' : loyaltyCount >= 4 ? 'var(--indigo)' : 'var(--red)', color: '#FFF', padding: '6px 16px', borderRadius: 'var(--radius-full)', fontSize: '0.9rem', fontWeight: 900, marginBottom: '16px', boxShadow: 'var(--shadow-sm)' }}>
-                        <Sparkles size={16} />
+                    <div style={{ background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)', borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid #FDE2E2', textAlign: 'center', marginBottom: '20px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: loyaltyCount >= 8 ? 'var(--amber)' : loyaltyCount >= 4 ? 'var(--indigo)' : 'var(--red)', color: '#FFF', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 900, marginBottom: '10px', boxShadow: 'var(--shadow-sm)' }}>
+                        <Sparkles size={13} />
                         {loyaltyCount >= 8 ? '👑 GOLD VIP MASTER' : loyaltyCount >= 4 ? '🥈 SILVER CONNOISSEUR' : '🥉 BRONZE FOODIE'}
                       </div>
 
-                      <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '2rem', fontWeight: 900, margin: 0, color: 'var(--text)' }}>RFC Watford Loyalty Club</h3>
-                      <p style={{ fontSize: '1rem', color: 'var(--text2)', marginTop: '8px' }}>Earn 1 stamp per order. Collect 8 stamps for 15% OFF your next feast!</p>
+                      <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.45rem', fontWeight: 900, margin: 0, color: 'var(--text)' }}>RFC Watford Loyalty Club</h3>
+                      <p style={{ fontSize: '0.88rem', color: 'var(--text2)', marginTop: '4px', margin: 0 }}>Earn 1 stamp per order. Collect 8 stamps for 15% OFF your next feast!</p>
 
-                      <div style={{ maxWidth: '600px', margin: '32px auto 16px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 800, marginBottom: '8px' }}>
+                      <div style={{ maxWidth: '480px', margin: '16px auto 10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, marginBottom: '6px' }}>
                           <span>Stamp Progress</span>
                           <span>{loyaltyPercent}% ({loyaltyCount}/8 Stamps)</span>
                         </div>
-                        <div style={{ height: '12px', borderRadius: 'var(--radius-full)', background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '10px', borderRadius: 'var(--radius-full)', background: 'var(--border)', overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${loyaltyPercent}%`, background: 'linear-gradient(90deg, var(--red), var(--amber))', transition: 'width 0.4s ease' }} />
                         </div>
                       </div>
 
                       {/* 8-Stamp Grid */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '16px', maxWidth: '800px', margin: '40px auto' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '8px', maxWidth: '580px', margin: '20px auto' }}>
                         {Array.from({ length: 8 }).map((_, i) => {
                           const isFilled = i < loyaltyCount;
                           return (
@@ -560,25 +778,25 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                               key={i} 
                               style={{ 
                                 aspectRatio: '1', 
-                                borderRadius: '20px', 
+                                borderRadius: '12px', 
                                 background: isFilled ? 'linear-gradient(135deg, var(--red), #DC2626)' : '#FFF', 
-                                border: isFilled ? 'none' : '3px dashed var(--border)', 
+                                border: isFilled ? 'none' : '2px dashed var(--border)', 
                                 color: isFilled ? '#FFF' : 'var(--text3)', 
                                 display: 'flex', 
                                 flexDirection: 'column',
                                 alignItems: 'center', 
                                 justifyContent: 'center', 
                                 fontWeight: 900, 
-                                fontSize: '1.2rem',
-                                boxShadow: isFilled ? '0 8px 16px rgba(220, 38, 38, 0.3)' : 'var(--shadow-sm)',
-                                transition: 'all 0.3s ease',
-                                transform: isFilled ? 'scale(1.05)' : 'scale(1)'
+                                fontSize: '0.95rem',
+                                boxShadow: isFilled ? '0 4px 10px rgba(220, 38, 38, 0.25)' : 'var(--shadow-sm)',
+                                transition: 'all 0.2s ease',
+                                transform: isFilled ? 'scale(1.02)' : 'scale(1)'
                               }}
                             >
                               {isFilled ? (
                                 <>
-                                  <Check size={28} />
-                                  <span style={{ fontSize: '0.7rem', marginTop: 4 }}>STAMP</span>
+                                  <Check size={18} />
+                                  <span style={{ fontSize: '0.55rem', marginTop: 2 }}>STAMP</span>
                                 </>
                               ) : (
                                 <span>{i + 1}</span>
@@ -589,7 +807,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                       </div>
 
                       {/* Claim Reward Action */}
-                      <div style={{ maxWidth: '400px', margin: '0 auto' }}>
+                      <div style={{ maxWidth: '340px', margin: '0 auto' }}>
                         {loyaltyCount >= 8 ? (
                           <button
                             type="button"
@@ -600,17 +818,17 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                               if (showToast) showToast('🎉 Reward Claimed! Voucher LOYAL15 (15% OFF) copied to clipboard!', 'success');
                             }}
                             style={{
-                              width: '100%', padding: '18px', fontSize: '1.2rem', fontWeight: 900,
+                              width: '100%', padding: '12px', fontSize: '1rem', fontWeight: 900,
                               background: 'linear-gradient(135deg, var(--amber), #D97706)', color: '#FFF',
                               border: 'none', borderRadius: 'var(--radius-full)', cursor: 'pointer',
-                              boxShadow: '0 10px 25px rgba(217, 119, 6, 0.4)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px'
+                              boxShadow: '0 6px 18px rgba(217, 119, 6, 0.35)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                             }}
                           >
-                            <Award size={24} /> Claim 15% OFF Voucher
+                            <Award size={18} /> Claim 15% OFF Voucher
                           </button>
                         ) : (
-                          <div style={{ background: '#FFF', padding: '16px', borderRadius: 'var(--radius-lg)', border: '2px solid var(--border)', fontSize: '0.95rem', color: 'var(--text2)', fontWeight: 700 }}>
+                          <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', fontSize: '0.85rem', color: 'var(--text2)', fontWeight: 700 }}>
                             🔒 Place {8 - loyaltyCount} more {8 - loyaltyCount === 1 ? 'order' : 'orders'} to unlock!
                           </div>
                         )}
@@ -618,31 +836,31 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     </div>
 
                     {/* Loyalty Perks Roadmap */}
-                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '32px', boxShadow: 'var(--shadow-sm)' }}>
-                      <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 900, margin: '0 0 20px 0', color: 'var(--text)' }}>
+                    <div style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '20px', boxShadow: 'var(--shadow-sm)' }}>
+                      <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', fontWeight: 900, margin: '0 0 14px 0', color: 'var(--text)' }}>
                         🏆 Membership Perks
                       </h3>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: '#FFF', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <span style={{ fontSize: '24px' }}>🥉</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '18px' }}>🥉</span>
                             <div>
-                              <strong style={{ display: 'block', color: 'var(--text)', fontSize: '1.05rem', fontWeight: 800 }}>Bronze Foodie (1-3 Stamps)</strong>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Earn 1 stamp on every order over £10</span>
+                              <strong style={{ display: 'block', color: 'var(--text)', fontSize: '0.9rem', fontWeight: 800 }}>Bronze Foodie (1-3 Stamps)</strong>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Earn 1 stamp on every order over £10</span>
                             </div>
                           </div>
-                          <span style={{ fontWeight: 900, color: loyaltyCount >= 1 ? 'var(--green)' : 'var(--text3)', background: loyaltyCount >= 1 ? 'var(--green-light)' : 'var(--surface)', padding: '6px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.85rem' }}>
+                          <span style={{ fontWeight: 900, color: loyaltyCount >= 1 ? 'var(--green)' : 'var(--text3)', background: loyaltyCount >= 1 ? 'var(--green-light)' : 'var(--surface-alt)', padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem' }}>
                             {loyaltyCount >= 1 ? '✓ Active' : 'Locked'}
                           </span>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: '#FFF', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <span style={{ fontSize: '24px' }}>🥈</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '18px' }}>🥈</span>
                             <div>
-                              <strong style={{ display: 'block', color: 'var(--text)', fontSize: '1.05rem', fontWeight: 800 }}>Silver Connoisseur (4 Stamps)</strong>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Unlock Free Side or Drink voucher (FREESIDE)</span>
+                              <strong style={{ display: 'block', color: 'var(--text)', fontSize: '0.9rem', fontWeight: 800 }}>Silver Connoisseur (4 Stamps)</strong>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Unlock Free Side or Drink voucher (FREESIDE)</span>
                             </div>
                           </div>
                           <button
@@ -653,26 +871,26 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                               if (showToast) showToast('Voucher FREESIDE copied to clipboard!', 'success');
                             }}
                             style={{
-                              background: loyaltyCount >= 4 ? 'var(--green)' : 'var(--surface)',
+                              background: loyaltyCount >= 4 ? 'var(--green)' : 'var(--surface-alt)',
                               color: loyaltyCount >= 4 ? '#FFF' : 'var(--text3)',
-                              border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-full)',
-                              fontWeight: 800, fontSize: '0.85rem', cursor: loyaltyCount >= 4 ? 'pointer' : 'default',
-                              boxShadow: loyaltyCount >= 4 ? '0 4px 10px rgba(16, 185, 129, 0.3)' : 'none'
+                              border: 'none', padding: '5px 12px', borderRadius: 'var(--radius-full)',
+                              fontWeight: 800, fontSize: '0.75rem', cursor: loyaltyCount >= 4 ? 'pointer' : 'default',
+                              display: 'flex', alignItems: 'center', gap: '4px'
                             }}
                           >
-                            {loyaltyCount >= 4 ? '🎁 Copy Code' : 'Locked'}
+                            {loyaltyCount >= 4 ? <><Copy size={12} /> Copy Code</> : 'Locked'}
                           </button>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: '#FFF', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <span style={{ fontSize: '24px' }}>🥇</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#FFF', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '18px' }}>🥇</span>
                             <div>
-                              <strong style={{ display: 'block', color: 'var(--text)', fontSize: '1.05rem', fontWeight: 800 }}>Gold VIP Master (8 Stamps)</strong>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>Unlock 15% OFF entire order voucher (LOYAL15)</span>
+                              <strong style={{ display: 'block', color: 'var(--text)', fontSize: '0.9rem', fontWeight: 800 }}>Gold VIP Master (8 Stamps)</strong>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Unlock 15% OFF entire order voucher (LOYAL15)</span>
                             </div>
                           </div>
-                          <span style={{ fontWeight: 900, color: loyaltyCount >= 8 ? 'var(--amber)' : 'var(--text3)', background: loyaltyCount >= 8 ? '#FEF3C7' : 'var(--surface)', padding: '6px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.85rem' }}>
+                          <span style={{ fontWeight: 900, color: loyaltyCount >= 8 ? 'var(--amber)' : 'var(--text3)', background: loyaltyCount >= 8 ? '#FEF3C7' : 'var(--surface-alt)', padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem' }}>
                             {loyaltyCount >= 8 ? '👑 Unlocked' : 'Locked'}
                           </span>
                         </div>
@@ -683,26 +901,24 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                 {activeTab === 'vouchers' && (
                   <div>
-                    <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900, marginBottom: '24px', borderBottom: '2px solid var(--border)', paddingBottom: '16px' }}>My Vouchers & Promos</h2>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
                       {[
                         { code: 'FIRST10', title: '10% OFF First Order', desc: 'Welcome bonus for new customers.' },
                         { code: 'OVER25', title: '10% OFF Orders over £25', desc: 'Valid on delivery & collection.' },
                         { code: 'RFC10', title: '10% OFF Special Deal', desc: 'Exclusive app & website offer.' },
                       ].map((v, i) => (
-                        <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div key={i} style={{ background: '#FFF', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                           <div>
-                            <span style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '6px 12px', borderRadius: 'var(--radius)', fontWeight: 900, fontSize: '0.9rem', letterSpacing: '1px' }}>{v.code}</span>
-                            <h3 style={{ fontWeight: 900, fontSize: '1.2rem', marginTop: '16px', fontFamily: 'var(--font-head)' }}>{v.title}</h3>
-                            <p style={{ fontSize: '0.9rem', color: 'var(--text2)', marginTop: '8px' }}>{v.desc}</p>
+                            <span style={{ background: 'var(--red-light)', color: 'var(--red)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontWeight: 900, fontSize: '0.82rem', letterSpacing: '1px' }}>{v.code}</span>
+                            <h3 style={{ fontWeight: 900, fontSize: '1.05rem', marginTop: '12px', fontFamily: 'var(--font-head)' }}>{v.title}</h3>
+                            <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '4px', margin: 0 }}>{v.desc}</p>
                           </div>
                           <button 
                             className="btn-add-item" 
                             onClick={() => { navigator.clipboard.writeText(v.code); if (showToast) showToast(`Voucher ${v.code} copied to clipboard!`); }} 
-                            style={{ width: '100%', marginTop: '24px', padding: '12px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                            style={{ width: '100%', marginTop: '16px', padding: '8px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                           >
-                            <Tag size={16} /> Copy Code
+                            <Copy size={14} /> Copy Code
                           </button>
                         </div>
                       ))}
@@ -712,7 +928,6 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
                 {activeTab === 'reviews' && (
                   <div>
-                    <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.6rem', fontWeight: 900, marginBottom: '24px', borderBottom: '2px solid var(--border)', paddingBottom: '16px' }}>Reviews & Feedback</h2>
                     <ReviewsManager isAdmin={false} showToast={showToast} />
                   </div>
                 )}
