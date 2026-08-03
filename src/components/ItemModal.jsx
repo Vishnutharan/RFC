@@ -98,34 +98,38 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          style={{ zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
         >
           <motion.div
             className="modal-card"
             onClick={(event) => event.stopPropagation()}
-            initial={{ opacity: 0, y: 34, scale: 0.98 }}
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 34, scale: 0.98 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            exit={{ opacity: 0, y: 24, scale: 0.98 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
             style={{ 
-              maxWidth: 500, 
+              maxWidth: 520, 
               width: '100%', 
-              margin: '20px', 
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
               padding: 0, 
               overflow: 'hidden', 
               background: 'var(--surface)', 
               borderRadius: 'var(--radius-lg)', 
-              boxShadow: 'var(--shadow-lg)' 
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+              position: 'relative'
             }}
           >
-            <div style={{ position: 'relative' }}>
+            {/* Header Image with Floating Close Button */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
               <img
                 src={item.imageUrl || fallbackImage}
                 alt={item.name}
                 onError={(event) => {
                   event.currentTarget.src = fallbackImage;
                 }}
-                style={{ width: '100%', height: 240, objectFit: 'cover' }}
+                style={{ width: '100%', height: '180px', objectFit: 'cover' }}
               />
               <button 
                 className="close-btn" 
@@ -134,40 +138,46 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
                 aria-label="Close item"
                 style={{
                   position: 'absolute',
-                  top: 16,
-                  right: 16,
-                  background: 'var(--white)',
+                  top: 12,
+                  right: 12,
+                  background: '#FFF',
                   border: 'none',
-                  borderRadius: 'var(--radius-full)',
-                  padding: 8,
+                  borderRadius: '50%',
+                  width: 34,
+                  height: 34,
                   cursor: 'pointer',
-                  boxShadow: 'var(--shadow-md)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   color: 'var(--text)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  zIndex: 2
                 }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="modal-header" style={{ padding: '24px 24px 0', borderBottom: 'none' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+            {/* Item Title & Price */}
+            <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                 <div>
-                  <h3 style={{ fontFamily: 'var(--font-head)', margin: 0, fontSize: '1.5rem', color: 'var(--text)', fontWeight: 600 }}>{item.name}</h3>
-                  <p style={{ color: 'var(--text2)', margin: '4px 0 0', fontSize: '0.95rem' }}>{item.description || 'Freshly prepared to order.'}</p>
+                  <h3 style={{ fontFamily: 'var(--font-head)', margin: 0, fontSize: '1.35rem', color: 'var(--text)', fontWeight: 800 }}>{item.name}</h3>
+                  <p style={{ color: 'var(--text2)', margin: '4px 0 0', fontSize: '0.88rem', lineHeight: 1.4 }}>{item.description || 'Freshly prepared to order.'}</p>
                   {(item.calorieInfo || item.calories) ? (
-                    <p style={{ color: 'var(--text3)', fontSize: '0.85rem', margin: '4px 0 0' }}>{item.calorieInfo || `${item.calories} kcal`}</p>
+                    <span style={{ display: 'inline-block', background: 'var(--surface-alt)', color: 'var(--text3)', fontSize: '0.78rem', padding: '2px 8px', borderRadius: '12px', marginTop: '6px', fontWeight: 600 }}>
+                      🔥 {item.calorieInfo || `${item.calories} kcal`}
+                    </span>
                   ) : null}
                 </div>
-                <span style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '1.25rem', color: 'var(--text)' }}>
-                  GBP {Number(item.price || 0).toFixed(2)}
+                <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.25rem', color: 'var(--red)', whiteSpace: 'nowrap' }}>
+                  £{Number(item.price || 0).toFixed(2)}
                 </span>
               </div>
             </div>
 
-            <div className="modal-body" style={{ padding: 24, maxHeight: '50vh', overflowY: 'auto' }}>
+            {/* Scrollable Modal Content Body */}
+            <div className="modal-body" style={{ padding: '16px 20px', flex: 1, overflowY: 'auto' }}>
               {item.hasOptions && item.sideChoices !== false && (
                 <OptionGroup
                   label="Choose your side"
@@ -186,8 +196,8 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
                 />
               )}
 
-              <div style={{ marginTop: 24 }}>
-                <label htmlFor="item-notes" style={{ display: 'block', fontFamily: 'var(--font-head)', fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>Special requests</label>
+              <div style={{ marginTop: 16 }}>
+                <label htmlFor="item-notes" style={{ display: 'block', fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)', marginBottom: 6 }}>Special requests</label>
                 <textarea
                   id="item-notes"
                   placeholder="Sauce, allergies, or kitchen notes..."
@@ -195,26 +205,28 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
                   onChange={(event) => setNotes(event.target.value)}
                   style={{ 
                     width: '100%', 
-                    padding: 16, 
-                    borderRadius: 'var(--radius)', 
+                    padding: 12, 
+                    borderRadius: 'var(--radius-sm)', 
                     border: '1px solid var(--border)', 
                     background: 'var(--surface-alt)', 
                     color: 'var(--text)', 
                     fontFamily: 'var(--font-body)', 
                     resize: 'vertical', 
-                    minHeight: 80, 
+                    minHeight: 64, 
+                    fontSize: '0.88rem',
                     boxSizing: 'border-box' 
                   }}
                 />
               </div>
             </div>
 
-            <div className="modal-footer" style={{ padding: 24, borderTop: '1px solid var(--border-light)', display: 'flex', gap: 16, alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-alt)', borderRadius: 'var(--radius-full)', padding: '4px 8px' }}>
+            {/* Pinned Sticky Bottom Footer */}
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', background: '#FFF', display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0, boxShadow: '0 -4px 12px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-alt)', border: '1px solid var(--border)', borderRadius: 'var(--radius-full)', padding: '2px 6px' }}>
                 <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Minus size={16} />
                 </button>
-                <span style={{ width: 32, textAlign: 'center', fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--font-body)' }}>{quantity}</span>
+                <span style={{ width: 28, textAlign: 'center', fontWeight: 800, color: 'var(--text)', fontFamily: 'var(--font-body)', fontSize: '0.95rem' }}>{quantity}</span>
                 <button type="button" onClick={() => setQuantity(quantity + 1)} style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Plus size={16} />
                 </button>
@@ -225,7 +237,7 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
                 onClick={handleAdd}
                 style={{ 
                   flex: 1, 
-                  padding: 16, 
+                  padding: '13px 18px', 
                   borderRadius: 'var(--radius-full)', 
                   background: 'var(--red)', 
                   color: 'var(--white)', 
@@ -234,15 +246,15 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
                   alignItems: 'center', 
                   justifyContent: 'center', 
                   gap: 8, 
-                  fontSize: '1rem', 
-                  fontWeight: 600, 
+                  fontSize: '0.95rem', 
+                  fontWeight: 800, 
                   fontFamily: 'var(--font-head)', 
                   cursor: 'pointer', 
                   boxShadow: 'var(--shadow-red)',
                   transition: 'opacity 0.2s ease'
                 }}
               >
-                <ShoppingBag size={18} /> Add to Order - GBP {totalPrice.toFixed(2)}
+                <ShoppingBag size={18} /> Add to Order • £{totalPrice.toFixed(2)}
               </button>
             </div>
           </motion.div>
@@ -254,41 +266,43 @@ export default function ItemModal({ item, onClose, onAddToCart }) {
 
 function OptionGroup({ label, options, selected, onSelect }) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <label style={{ display: 'block', fontFamily: 'var(--font-head)', fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>{label}</label>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {options.map((option) => (
-          <button
-            key={option.name}
-            type="button"
-            onClick={() => onSelect(selected === option.name ? '' : option.name)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: 16,
-              borderRadius: 'var(--radius)',
-              border: selected === option.name ? '2px solid var(--red)' : '1px solid var(--border)',
-              background: selected === option.name ? 'var(--surface)' : 'var(--surface-alt)',
-              cursor: 'pointer',
-              color: 'var(--text)',
-              fontFamily: 'var(--font-body)',
-              transition: 'all 0.2s ease',
-              boxShadow: selected === option.name ? 'var(--shadow-sm)' : 'none',
-              textAlign: 'left'
-            }}
-          >
-             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{
-                    width: 20, height: 20, borderRadius: '50%', border: selected === option.name ? '6px solid var(--red)' : '2px solid var(--border)', background: 'var(--white)', transition: 'all 0.2s ease', flexShrink: 0
-                }} />
-                <span style={{ fontWeight: selected === option.name ? 600 : 400 }}>{option.name}</span>
-             </div>
-             {option.extraPrice > 0 && (
-                <span style={{ color: 'var(--text2)', fontSize: '0.9rem' }}>+GBP {option.extraPrice.toFixed(2)}</span>
-             )}
-          </button>
-        ))}
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: 'block', fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)', marginBottom: 8 }}>{label}</label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {options.map((option) => {
+          const isSelected = selected === option.name;
+          return (
+            <button
+              key={option.name}
+              type="button"
+              onClick={() => onSelect(isSelected ? '' : option.name)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 14px',
+                borderRadius: 'var(--radius-sm)',
+                border: isSelected ? '2px solid var(--red)' : '1px solid var(--border)',
+                background: isSelected ? 'var(--red-light)' : '#FFF',
+                cursor: 'pointer',
+                color: isSelected ? 'var(--red)' : 'var(--text)',
+                fontFamily: 'var(--font-body)',
+                transition: 'all 0.15s ease',
+                textAlign: 'left'
+              }}
+            >
+               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                      width: 18, height: 18, borderRadius: '50%', border: isSelected ? '5px solid var(--red)' : '2px solid var(--border)', background: '#FFF', transition: 'all 0.15s ease', flexShrink: 0
+                  }} />
+                  <span style={{ fontWeight: isSelected ? 800 : 500, fontSize: '0.88rem' }}>{option.name}</span>
+               </div>
+               {option.extraPrice > 0 && (
+                  <span style={{ color: isSelected ? 'var(--red)' : 'var(--text2)', fontSize: '0.82rem', fontWeight: 700 }}>+£{option.extraPrice.toFixed(2)}</span>
+               )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
