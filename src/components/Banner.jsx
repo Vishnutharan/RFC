@@ -9,17 +9,21 @@ import {
   MapPin,
   Phone,
   ExternalLink,
-  ArrowRight
+  ArrowRight,
+  Sparkles,
+  Tag
 } from 'lucide-react';
 
 const vouchers = [
   {
     code: 'FIRST10',
-    desc: '10% off your first order'
+    title: '10% OFF First Order',
+    desc: 'Valid for new customers. Instant discount at checkout.'
   },
   {
     code: 'OVER25',
-    desc: '10% off orders over £25'
+    title: '10% OFF Orders over £25',
+    desc: 'Valid on all delivery & collection orders over £25.'
   }
 ];
 
@@ -51,13 +55,13 @@ export default function Banner({ onApplyVoucher, showToast }) {
       onApplyVoucher(code);
     }
     if (showToast) {
-      showToast(`Voucher ${code} copied & applied!`, 'success');
+      showToast(`Voucher ${code} copied & applied! ✨`, 'success');
     }
   };
 
   return (
     <section className="banner-container">
-      {/* Hero Section */}
+      {/* Hero Banner Section */}
       <div
         className="hero-section"
         style={{
@@ -65,9 +69,9 @@ export default function Banner({ onApplyVoucher, showToast }) {
         }}
       >
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         >
           <div
             style={{
@@ -92,7 +96,7 @@ export default function Banner({ onApplyVoucher, showToast }) {
                 display: 'inline-block'
               }}
             />
-            Open Now &bull; Delivering Fresh
+            Open Now &bull; Delivering Fresh in Watford
           </div>
 
           <h1 className="hero-title">
@@ -101,17 +105,19 @@ export default function Banner({ onApplyVoucher, showToast }) {
           </h1>
 
           <p className="hero-subtitle">
-            Artisan fried chicken, stacked box meals, hot wings, and fresh sides prepared daily in our Watford kitchen and delivered hot to your doorstep.
+            Artisan fried chicken, stacked box meals, hot wings, and fresh sides prepared daily in our Watford kitchen.
           </p>
 
           <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-            <a
+            <motion.a
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               href="#menu"
               className="btn-submit-modal"
               style={{ textDecoration: 'none', padding: '10px 22px', fontSize: '0.88rem' }}
             >
               Order Now <ArrowRight size={16} />
-            </a>
+            </motion.a>
           </div>
 
           <div className="hero-stats">
@@ -134,57 +140,80 @@ export default function Banner({ onApplyVoucher, showToast }) {
         </motion.div>
       </div>
 
-      {/* Promotions & Store Info Section */}
-      <div id="deals" className="promo-section">
-        <div className="vouchers-container">
+      {/* Compact Promotions & Store Info Bar */}
+      <div id="deals" className="promo-section" style={{ marginTop: '16px' }}>
+        
+        {/* Sleek Compact Vouchers */}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           {vouchers.map((voucher, index) => (
             <motion.div
               key={voucher.code}
-              className="voucher-card"
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 12 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
+              transition={{ duration: 0.3, delay: index * 0.08 }}
+              style={{
+                flex: '1 1 260px',
+                maxWidth: '340px',
+                background: '#FFF',
+                border: '1.5px dashed var(--red)',
+                borderRadius: 'var(--radius)',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                boxShadow: 'var(--shadow-sm)'
+              }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className="voucher-code">{voucher.code}</span>
-                <Scissors size={16} style={{ color: 'var(--red)' }} />
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Tag size={15} color="var(--red)" />
+                  <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '0.95rem', color: 'var(--red)' }}>
+                    {voucher.code}
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text2)', margin: '2px 0 0 0', fontWeight: 600 }}>
+                  {voucher.desc}
+                </p>
               </div>
-              <p className="voucher-desc">{voucher.desc}</p>
-              <button
+
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.95 }}
                 type="button"
                 className="copy-btn"
                 onClick={() => handleCopy(voucher.code)}
+                style={{ flexShrink: 0, padding: '6px 12px', fontSize: '0.78rem' }}
               >
-                <Copy size={14} /> Copy &amp; Apply
-              </button>
+                <Copy size={13} /> Copy Code
+              </motion.button>
             </motion.div>
           ))}
         </div>
 
-        <aside className="store-info-card">
-          <h3
-            style={{
-              fontFamily: 'var(--font-head)',
-              fontWeight: 800,
-              fontSize: '1.05rem',
-              color: 'var(--text)'
-            }}
-          >
-            RFC Watford
-          </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text2)' }}>
-            <MapPin size={16} style={{ color: 'var(--red)', flexShrink: 0 }} />
-            <span>119 Courtlands Drive, Watford WD17 4HZ</span>
+        {/* Compact Store Info Bar */}
+        <div style={{
+          background: '#FFF',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          boxShadow: 'var(--shadow-sm)'
+        }}>
+          <div>
+            <h4 style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: '0.92rem', color: 'var(--text)', margin: 0 }}>
+              📍 RFC Watford Kitchen
+            </h4>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text2)', display: 'block', marginTop: '2px' }}>
+              119 Courtlands Drive, Watford WD17 4HZ &bull; 🕒 Mon-Sun 11AM-10PM
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text2)' }}>
-            <Clock size={16} style={{ color: 'var(--amber)', flexShrink: 0 }} />
-            <span>Mon-Sun: 11AM - 10PM</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text2)' }}>
-            <Phone size={16} style={{ color: 'var(--green)', flexShrink: 0 }} />
-            <span>+44 1923 961864</span>
-          </div>
+
           <a
             href="https://www.google.com/maps/dir/?api=1&destination=RFC%20Watford,%20119%20Courtlands%20Drive,%20Watford%20WD17%204HZ"
             target="_blank"
@@ -192,17 +221,20 @@ export default function Banner({ onApplyVoucher, showToast }) {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              fontSize: '0.8rem',
-              fontWeight: 700,
+              gap: '4px',
+              fontSize: '0.78rem',
+              fontWeight: 800,
               color: 'var(--red)',
-              marginTop: 'auto',
-              textDecoration: 'none'
+              textDecoration: 'none',
+              background: 'var(--red-light)',
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-full)'
             }}
           >
-            Get directions <ExternalLink size={14} />
+            Get directions <ExternalLink size={13} />
           </a>
-        </aside>
+        </div>
+
       </div>
     </section>
   );
