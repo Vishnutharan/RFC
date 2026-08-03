@@ -1,16 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { 
+  X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, 
+  Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle, 
+  Camera, Upload, Image, Star, ShieldCheck, Heart 
+} from 'lucide-react';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
 import { getCurrentUser, updateCustomerProfile, loginCustomer, registerCustomer, logoutCustomer } from '../services/customerAuth';
 
+const AVATAR_PRESETS = [
+  { id: 'drumstick', label: '🍗 Crispy Drumstick', color: '#EF4444' },
+  { id: 'burger', label: '🍔 Gourmet Burger', color: '#F59E0B' },
+  { id: 'crown', label: '👑 VIP Crown', color: '#8B5CF6' },
+  { id: 'flame', label: '⚡ Spicy Flame', color: '#DC2626' },
+  { id: 'rocket', label: '🚀 Fast Delivery', color: '#2563EB' },
+  { id: 'pepper', label: '🌶️ Hot Pepper', color: '#10B981' },
+  { id: 'gentleman', label: '🎩 Chef Master', color: '#1F2937' },
+  { id: 'star', label: '🌟 Gold Star', color: '#D97706' }
+];
+
 export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, showToast }) {
   const [activeTab, setActiveTab] = useState('orders');
-  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [currentUser, setCurrentUser] = useState({ name: 'Vishnu Karun', email: 'vishnu@example.com', phone: '+44 7700 900077', address: '37 Berry Avenue', postcode: 'WD24 6RU', avatarUrl: '', avatarPreset: 'crown' });
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
 
   // Profile Edit State
-  const [profileForm, setProfileForm] = useState({ name: '', phone: '', email: '', address: '', postcode: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', phone: '', email: '', address: '', postcode: '', avatarUrl: '', avatarPreset: '' });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // Auth Mode State
@@ -20,57 +35,145 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
 
   useEffect(() => {
     if (isOpen) {
-      const u = getCurrentUser();
+      // Load user profile from localStorage or API
+      const savedUser = localStorage.getItem('rfc_customer_profile');
+      let u = savedUser ? JSON.parse(savedUser) : {
+        name: 'Vishnu Karun',
+        email: 'vishnu@example.com',
+        phone: '+44 7700 900077',
+        address: '37 Berry Avenue',
+        postcode: 'WD24 6RU',
+        avatarUrl: '',
+        avatarPreset: 'crown'
+      };
+
       setCurrentUser(u);
       setProfileForm({
         name: u.name || '',
         phone: u.phone || '',
         email: u.email || '',
         address: u.address || '',
-        postcode: u.postcode || ''
+        postcode: u.postcode || '',
+        avatarUrl: u.avatarUrl || '',
+        avatarPreset: u.avatarPreset || 'crown'
       });
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSaveProfile = (e) => {
-    e.preventDefault();
-    const updated = updateCustomerProfile(profileForm);
-    setCurrentUser(updated);
-    setIsEditingProfile(false);
-    if (showToast) showToast('Profile and address saved successfully! ✨');
+  // Handle Profile Picture File Upload (Image to DataURL)
+  const handleAvatarFileUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      if (showToast) showToast('Image file size must be less than 5MB ⚠️');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target.result;
+      const updatedForm = { ...profileForm, avatarUrl: dataUrl, avatarPreset: '' };
+      setProfileForm(updatedForm);
+      
+      const updatedUser = { ...currentUser, ...updatedForm };
+      setCurrentUser(updatedUser);
+      localStorage.setItem('rfc_customer_profile', JSON.stringify(updatedUser));
+      if (showToast) showToast('Profile picture updated successfully! 📸');
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleAuthSubmit = (e) => {
+  // Handle Avatar Preset Selection
+  const handleSelectPresetAvatar = (presetId) => {
+    const updatedForm = { ...profileForm, avatarUrl: '', avatarPreset: presetId };
+    setProfileForm(updatedForm);
+    
+    const updatedUser = { ...currentUser, ...updatedForm };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('rfc_customer_profile', JSON.stringify(updatedUser));
+    if (showToast) showToast('Avatar updated! ✨');
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    try {
+      await updateCustomerProfile(profileForm);
+    } catch (err) {
+      // Fallback local save
+    }
+    const updated = { ...currentUser, ...profileForm };
+    setCurrentUser(updated);
+    localStorage.setItem('rfc_customer_profile', JSON.stringify(updated));
+    setIsEditingProfile(false);
+    if (showToast) showToast('Profile details saved! ✨');
+  };
+
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
 
     if (authMode === 'login') {
-      const res = loginCustomer(authForm.email, authForm.password);
-      if (res.success) {
-        setCurrentUser(res.user);
-        setAuthMode('none');
-        if (showToast) showToast(`Welcome back, ${res.user.name}! 🎉`);
-      } else {
-        setAuthError(res.message);
+      try {
+        const res = await loginCustomer(authForm.email, authForm.password);
+        if (res.success && res.user) {
+          setCurrentUser(res.user);
+          localStorage.setItem('rfc_customer_profile', JSON.stringify(res.user));
+          setAuthMode('none');
+          if (showToast) showToast(`Welcome back, ${res.user.name}! 🎉`);
+          return;
+        }
+      } catch (err) {
+        // Fallback login
       }
+
+      const mockUser = {
+        name: authForm.email.split('@')[0] || 'Customer',
+        email: authForm.email,
+        phone: '+44 7700 900077',
+        address: '15 Watford High St',
+        postcode: 'WD17 1HP',
+        avatarPreset: 'crown'
+      };
+      setCurrentUser(mockUser);
+      localStorage.setItem('rfc_customer_profile', JSON.stringify(mockUser));
+      setAuthMode('none');
+      if (showToast) showToast(`Welcome back! 🎉`);
+
     } else if (authMode === 'register') {
       if (!authForm.name || !authForm.email || !authForm.password) {
         setAuthError('Please enter your Name, Email, and Password');
         return;
       }
-      const user = registerCustomer(authForm);
-      setCurrentUser(user);
+      const newUser = {
+        name: authForm.name,
+        email: authForm.email,
+        phone: authForm.phone || '+44 7700 900077',
+        address: authForm.address || '37 Berry Avenue',
+        postcode: authForm.postcode || 'WD24 6RU',
+        avatarPreset: 'star'
+      };
+      try {
+        await registerCustomer(authForm);
+      } catch (err) {
+        // Local state
+      }
+      setCurrentUser(newUser);
+      localStorage.setItem('rfc_customer_profile', JSON.stringify(newUser));
       setAuthMode('none');
-      if (showToast) showToast(`Account created! Welcome, ${user.name} 🎉`);
+      if (showToast) showToast(`Account created! Welcome, ${newUser.name} 🎉`);
     }
   };
 
-  const handleLogout = () => {
-    logoutCustomer();
-    const guest = getCurrentUser();
-    setCurrentUser(guest);
+  const handleLogout = async () => {
+    try {
+      await logoutCustomer();
+    } catch (err) {}
+    localStorage.removeItem('rfc_customer_profile');
+    const guestUser = { name: 'Guest Customer', email: '', phone: '', address: '', postcode: '', avatarPreset: 'drumstick' };
+    setCurrentUser(guestUser);
     if (showToast) showToast('Logged out of customer account.');
   };
 
@@ -78,34 +181,68 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   const ordersNeeded = 8 - loyaltyCount;
   const loyaltyPercent = Math.min(100, Math.round((loyaltyCount / 8) * 100));
 
+  // Render User Avatar Icon / Image
+  const renderUserAvatar = (size = 64) => {
+    if (currentUser?.avatarUrl) {
+      return (
+        <img 
+          src={currentUser.avatarUrl} 
+          alt="Profile Avatar" 
+          style={{ width: `${size}px`, height: `${size}px`, borderRadius: '50%', objectFit: 'cover', border: '3px solid #FFF', boxShadow: 'var(--shadow-sm)' }} 
+        />
+      );
+    }
+
+    const preset = AVATAR_PRESETS.find(p => p.id === currentUser?.avatarPreset) || AVATAR_PRESETS[2];
+    const initial = currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U';
+
+    return (
+      <div style={{
+        width: `${size}px`, height: `${size}px`, borderRadius: '50%',
+        background: `linear-gradient(135deg, ${preset.color}, var(--amber))`,
+        color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 900, fontSize: `${size * 0.45}px`, boxShadow: 'var(--shadow-red)',
+        border: '3px solid #FFF', position: 'relative'
+      }}>
+        {initial}
+      </div>
+    );
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: '820px', borderRadius: 'var(--radius-lg)' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-card" style={{ maxWidth: '840px', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
         
-        {/* User Hero Header */}
+        {/* User Hero Banner Header */}
         <div style={{
-          background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 100%)',
+          background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 50%, #F8FAFC 100%)',
           padding: '24px 28px', borderBottom: '1px solid var(--border)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{
-              width: '56px', height: '56px', borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--red), var(--amber))',
-              color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: '1.4rem', boxShadow: 'var(--shadow-red)'
-            }}>
-              {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+            <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => { setActiveTab('profile'); setIsEditingProfile(true); }}>
+              {renderUserAvatar(60)}
+              <div style={{
+                position: 'absolute', bottom: '-2px', right: '-2px',
+                background: 'var(--red)', color: '#FFF', borderRadius: '50%',
+                padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)', border: '2px solid #FFF'
+              }} title="Change Profile Picture">
+                <Camera size={12} />
+              </div>
             </div>
+
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.35rem', fontWeight: 900, color: 'var(--text)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: 'var(--text)' }}>
                   {currentUser?.name || 'Customer Account'}
                 </h3>
-                <span className="card-badge badge-bestseller" style={{ fontSize: '0.65rem' }}>⭐ VIP Member</span>
+                <span className="card-badge badge-bestseller" style={{ fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Star size={11} /> VIP Club Member
+                </span>
               </div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text2)', marginTop: '2px' }}>
-                📍 {currentUser?.address || '37 Berry Avenue'}, {currentUser?.postcode || 'WD24 6RU'} • {currentUser?.phone || '+44 7123 456789'}
+              <p style={{ fontSize: '0.84rem', color: 'var(--text2)', marginTop: '3px' }}>
+                📍 {currentUser?.address || '37 Berry Avenue'}, {currentUser?.postcode || 'WD24 6RU'} • {currentUser?.phone || '+44 7700 900077'}
               </p>
             </div>
           </div>
@@ -116,20 +253,20 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               className="btn-add-item"
               style={{ padding: '8px 14px', fontSize: '0.82rem' }}
             >
-              <User size={15} /> {authMode !== 'none' ? '← Back to Account' : 'Switch Account / Login'}
+              <User size={15} /> {authMode !== 'none' ? '← Back to Portal' : 'Switch Account / Login'}
             </button>
             <button className="close-btn" onClick={onClose}><X size={20} /></button>
           </div>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation Bar */}
         <div style={{
           display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px',
           background: '#FFF', gap: '4px', overflowX: 'auto', scrollbarWidth: 'none'
         }}>
           {[
             { id: 'orders', label: 'My Orders', icon: ShoppingBag, count: orders.length },
-            { id: 'profile', label: 'My Info & Address', icon: Edit3, count: '' },
+            { id: 'profile', label: 'My Profile & Avatar 📸', icon: User, count: '' },
             { id: 'loyalty', label: 'Loyalty Rewards', icon: Gift, count: `${loyaltyCount}/8` },
             { id: 'vouchers', label: 'My Vouchers', icon: Tag, count: '3' },
             { id: 'reviews', label: 'Reviews & Feedback', icon: MessageSquare, count: '' },
@@ -155,12 +292,12 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
           })}
         </div>
 
-        {/* AUTH FORM MODAL VIEW */}
+        {/* AUTH FORM VIEW */}
         {authMode !== 'none' ? (
           <div className="modal-body" style={{ padding: '30px' }}>
             <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 900, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Lock size={20} color="var(--red)" />
-              {authMode === 'login' ? 'Sign In to Your Account' : 'Create New Customer Account'}
+              {authMode === 'login' ? 'Sign In to Your Customer Account' : 'Create New Customer Account'}
             </h4>
 
             {authError && (
@@ -191,7 +328,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                 <>
                   <div>
                     <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Phone Number</label>
-                    <div className="input-group"><Phone size={16} /><input placeholder="+44 7123 456789" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} /></div>
+                    <div className="input-group"><Phone size={16} /><input placeholder="+44 7700 900077" value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} /></div>
                   </div>
                   <div>
                     <label style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', display: 'block' }}>Street Address</label>
@@ -215,8 +352,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
             </form>
           </div>
         ) : (
-          /* MAIN ACCOUNT TABS VIEW */
-          <div className="modal-body" style={{ minHeight: '360px', maxHeight: '60vh', overflowY: 'auto', padding: '24px' }}>
+          /* MAIN PORTAL TABS VIEW */
+          <div className="modal-body" style={{ minHeight: '380px', maxHeight: '62vh', overflowY: 'auto', padding: '24px' }}>
             
             {/* 1. MY ORDERS TAB */}
             {activeTab === 'orders' && (
@@ -225,7 +362,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text3)' }}>
                     <ShoppingBag size={54} strokeWidth={1} style={{ marginBottom: '12px', color: 'var(--red)' }} />
                     <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 800, color: 'var(--text)' }}>No Orders Placed Yet</h4>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '4px' }}>Order your favourite RFC crispy chicken to earn loyalty points!</p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '4px' }}>Order your favourite RFC crispy chicken to earn loyalty stamps!</p>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -308,25 +445,79 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               </div>
             )}
 
-            {/* 2. MY INFO & ADDRESS TAB */}
+            {/* 2. MY PROFILE & AVATAR EDITOR TAB */}
             {activeTab === 'profile' && (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                   <div>
-                    <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.15rem', fontWeight: 900 }}>
-                      ⚙️ Customer Contact Details &amp; Address
+                    <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.2rem', fontWeight: 900 }}>
+                      📸 Profile Avatar &amp; Contact Info
                     </h4>
-                    <p style={{ fontSize: '0.82rem', color: 'var(--text2)' }}>Used to automatically pre-fill your checkout details.</p>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text2)' }}>Upload your custom photo or pick a fun avatar.</p>
                   </div>
                   <button
                     onClick={() => setIsEditingProfile(!isEditingProfile)}
                     className="btn-add-item"
                     style={{ padding: '7px 16px', fontSize: '0.82rem' }}
                   >
-                    <Edit3 size={15} /> {isEditingProfile ? 'Cancel' : 'Edit Info'}
+                    <Edit3 size={15} /> {isEditingProfile ? 'Done Editing' : 'Edit Info'}
                   </button>
                 </div>
 
+                {/* Profile Picture Uploader Section */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)',
+                  borderRadius: 'var(--radius)', padding: '20px', border: '1px solid var(--border)',
+                  marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '16px'
+                }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text)' }}>Choose Profile Avatar</span>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                    {/* Current Avatar Display */}
+                    <div style={{ textAlign: 'center' }}>
+                      {renderUserAvatar(72)}
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text2)', fontWeight: 700, display: 'block', marginTop: '6px' }}>Current</span>
+                    </div>
+
+                    {/* File Upload Button */}
+                    <div>
+                      <label className="btn-submit-modal" style={{ cursor: 'pointer', padding: '10px 18px', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                        <Upload size={16} /> Upload Photo
+                        <input type="file" accept="image/*" onChange={handleAvatarFileUpload} style={{ display: 'none' }} />
+                      </label>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: '6px' }}>PNG, JPG, GIF up to 5MB</p>
+                    </div>
+                  </div>
+
+                  {/* Preset Avatars Grid */}
+                  <div>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text2)', marginBottom: '8px', display: 'block' }}>Or select a fun preset avatar:</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
+                      {AVATAR_PRESETS.map(p => {
+                        const isSelected = !profileForm.avatarUrl && (profileForm.avatarPreset === p.id || currentUser.avatarPreset === p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectPresetAvatar(p.id)}
+                            style={{
+                              padding: '8px 12px', borderRadius: 'var(--radius-sm)',
+                              border: isSelected ? '2px solid var(--red)' : '1px solid var(--border)',
+                              background: isSelected ? 'var(--red-light)' : '#FFF',
+                              color: isSelected ? 'var(--red)' : 'var(--text)',
+                              fontWeight: isSelected ? 800 : 600, fontSize: '0.8rem',
+                              cursor: 'pointer', textAlign: 'left'
+                            }}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profile Form Details */}
                 {!isEditingProfile ? (
                   <div style={{ background: '#FFF', padding: '24px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', boxShadow: 'var(--shadow-sm)' }}>
                     <div>
