@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import confetti from 'canvas-confetti';
 import { 
   X, User, ShoppingBag, Gift, MapPin, Printer, RotateCcw, Check, Sparkles, 
   Tag, Edit3, Save, LogOut, Lock, Mail, Phone, MessageSquare, AlertTriangle, 
-  Camera, Upload, Image, Star, ShieldCheck, Heart 
+  Camera, Upload, Image, Star, ShieldCheck, Heart, Award
 } from 'lucide-react';
 import ReviewsManager from './ReviewsManager';
 import CancelOrderModal from './CancelOrderModal';
@@ -440,20 +441,158 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
             {activeTab === 'loyalty' && (
               <div>
                 <div style={{ background: 'linear-gradient(135deg, #FFF5F5, #FFF8ED)', borderRadius: 'var(--radius-lg)', padding: '24px', border: '1px solid #FDE2E2', textAlign: 'center', marginBottom: '20px' }}>
-                  <Sparkles size={32} color="var(--amber)" style={{ marginBottom: '8px' }} />
-                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 900 }}>RFC Watford Loyalty Club</h4>
-                  <p style={{ fontSize: '0.86rem', color: 'var(--text2)', marginTop: '4px' }}>Collect 8 stamps for 10% OFF your next order!</p>
-                  <div style={{ margin: '20px 0 10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, marginBottom: '6px' }}><span>Progress</span><span>{loyaltyPercent}% ({loyaltyCount}/8)</span></div>
-                    <div style={{ height: '10px', borderRadius: 'var(--radius-full)', background: 'var(--border)', overflow: 'hidden' }}><div style={{ height: '100%', width: `${loyaltyPercent}%`, background: 'linear-gradient(90deg, var(--red), var(--amber))' }} /></div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: loyaltyCount >= 8 ? 'var(--amber)' : loyaltyCount >= 4 ? 'var(--indigo)' : 'var(--red)', color: '#FFF', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 800, marginBottom: '12px' }}>
+                    <Sparkles size={14} />
+                    {loyaltyCount >= 8 ? '👑 GOLD VIP MASTER' : loyaltyCount >= 4 ? '🥈 SILVER CONNOISSEUR' : '🥉 BRONZE FOODIE'}
                   </div>
+
+                  <h4 style={{ fontFamily: 'var(--font-head)', fontSize: '1.35rem', fontWeight: 900, margin: 0, color: 'var(--text)' }}>RFC Watford Loyalty Club</h4>
+                  <p style={{ fontSize: '0.86rem', color: 'var(--text2)', marginTop: '4px' }}>Earn 1 stamp per order. Collect 8 stamps for 15% OFF!</p>
+
+                  <div style={{ margin: '20px 0 12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800, marginBottom: '6px' }}>
+                      <span>Stamp Progress</span>
+                      <span>{loyaltyPercent}% ({loyaltyCount}/8 Stamps)</span>
+                    </div>
+                    <div style={{ height: '10px', borderRadius: 'var(--radius-full)', background: 'var(--border)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${loyaltyPercent}%`, background: 'linear-gradient(90deg, var(--red), var(--amber))', transition: 'width 0.4s ease' }} />
+                    </div>
+                  </div>
+
+                  {/* 8-Stamp Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', margin: '20px 0' }}>
                     {Array.from({ length: 8 }).map((_, i) => {
                       const isFilled = i < loyaltyCount;
                       return (
-                        <div key={i} style={{ aspectRatio: '1', borderRadius: '16px', background: isFilled ? 'var(--red)' : 'var(--white)', border: isFilled ? 'none' : '2px dashed var(--border)', color: isFilled ? '#FFF' : 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '0.95rem' }}>{isFilled ? <Check size={24} /> : <span>#{i + 1}</span>}</div>
+                        <div 
+                          key={i} 
+                          style={{ 
+                            aspectRatio: '1', 
+                            borderRadius: '16px', 
+                            background: isFilled ? 'linear-gradient(135deg, var(--red), #DC2626)' : '#FFF', 
+                            border: isFilled ? 'none' : '2px dashed var(--border)', 
+                            color: isFilled ? '#FFF' : 'var(--text3)', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            fontWeight: 900, 
+                            fontSize: '0.88rem',
+                            boxShadow: isFilled ? '0 4px 10px rgba(220, 38, 38, 0.25)' : 'none',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {isFilled ? (
+                            <>
+                              <Check size={22} />
+                              <span style={{ fontSize: '0.65rem', marginTop: 2 }}>STAMP #{i + 1}</span>
+                            </>
+                          ) : (
+                            <span>#{i + 1}</span>
+                          )}
+                        </div>
                       );
                     })}
+                  </div>
+
+                  {/* Claim Reward Action */}
+                  {loyaltyCount >= 8 ? (
+                    <button
+                      type="button"
+                      className="btn-submit-modal"
+                      onClick={() => {
+                        confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 } });
+                        if (navigator.clipboard?.writeText) navigator.clipboard.writeText('LOYAL15');
+                        if (showToast) showToast('🎉 Reward Claimed! Voucher LOYAL15 (15% OFF) copied to clipboard!', 'success');
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        fontSize: '1rem',
+                        fontWeight: 900,
+                        background: 'linear-gradient(135deg, var(--amber), #D97706)',
+                        color: '#FFF',
+                        border: 'none',
+                        borderRadius: 'var(--radius-full)',
+                        cursor: 'pointer',
+                        boxShadow: '0 8px 20px rgba(217, 119, 6, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <Award size={20} /> 🎉 Claim Reward Voucher (15% OFF)
+                    </button>
+                  ) : (
+                    <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.82rem', color: 'var(--text2)', fontWeight: 600 }}>
+                      🔒 Place {8 - loyaltyCount} more {8 - loyaltyCount === 1 ? 'order' : 'orders'} to unlock your 15% OFF reward voucher!
+                    </div>
+                  )}
+                </div>
+
+                {/* Loyalty Perks Roadmap */}
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px', boxShadow: 'var(--shadow-sm)' }}>
+                  <h5 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 800, margin: '0 0 12px 0', color: 'var(--text)' }}>
+                    🏆 Membership Perks Roadmap
+                  </h5>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🥉</span>
+                        <div>
+                          <strong style={{ display: 'block', color: 'var(--text)' }}>Bronze Foodie (1-3 Stamps)</strong>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Earn 1 stamp on every order over £10</span>
+                        </div>
+                      </div>
+                      <span style={{ fontWeight: 800, color: loyaltyCount >= 1 ? 'var(--green)' : 'var(--text3)' }}>
+                        {loyaltyCount >= 1 ? '✓ Active' : 'Locked'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🥈</span>
+                        <div>
+                          <strong style={{ display: 'block', color: 'var(--text)' }}>Silver Connoisseur (4 Stamps)</strong>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Unlock Free Side or Drink voucher (FREESIDE)</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (loyaltyCount < 4) return;
+                          if (navigator.clipboard?.writeText) navigator.clipboard.writeText('FREESIDE');
+                          if (showToast) showToast('Voucher FREESIDE copied to clipboard!', 'success');
+                        }}
+                        style={{
+                          background: loyaltyCount >= 4 ? 'var(--green-light)' : 'transparent',
+                          color: loyaltyCount >= 4 ? 'var(--green)' : 'var(--text3)',
+                          border: loyaltyCount >= 4 ? '1px solid var(--green)' : 'none',
+                          padding: '4px 10px',
+                          borderRadius: 'var(--radius-xs)',
+                          fontWeight: 800,
+                          fontSize: '0.78rem',
+                          cursor: loyaltyCount >= 4 ? 'pointer' : 'default'
+                        }}
+                      >
+                        {loyaltyCount >= 4 ? '🎁 Claim Free Side' : 'Locked'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>🥇</span>
+                        <div>
+                          <strong style={{ display: 'block', color: 'var(--text)' }}>Gold VIP Master (8 Stamps)</strong>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text2)' }}>Unlock 15% OFF entire order voucher (LOYAL15)</span>
+                        </div>
+                      </div>
+                      <span style={{ fontWeight: 800, color: loyaltyCount >= 8 ? 'var(--amber)' : 'var(--text3)' }}>
+                        {loyaltyCount >= 8 ? '👑 Unlocked' : 'Locked'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
