@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Flame, ShoppingBag } from 'lucide-react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import Banner from './components/Banner';
@@ -248,25 +250,48 @@ export default function App() {
           <footer className="app-footer">
             <div className="footer-content">
               <div className="footer-brand">
-                <span className="footer-logo">RFC</span>
-                <p>RFC Watford - Fresh Crispy Chicken Since 2018</p>
-                <p className="footer-address">119 Courtlands Drive, Watford WD17 4HZ - +44 1923 961864</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span className="logo-badge" style={{ width: 32, height: 32 }}>
+                    <Flame size={18} />
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.2rem', color: 'var(--text)' }}>
+                    RFC <span style={{ color: 'var(--red)' }}>Watford</span>
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text2)' }}>Fresh Crispy Chicken &amp; Box Meals Since 2018</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: 'var(--text3)' }}>119 Courtlands Drive, Watford WD17 4HZ &bull; +44 1923 961864</p>
               </div>
+
               <div className="footer-links">
-                <span>Adults need around 2000 kcal a day</span>
-                <a href="https://www.rfcchickenwatford.com/terms" target="_blank" rel="noreferrer">Terms</a>
-                <button type="button" className="footer-link-button" onClick={() => setIsPrivacyOpen(true)}>Privacy</button>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text3)' }}>🔥 Adults need around 2000 kcal a day</span>
+                <span style={{ color: 'var(--border)' }}>&bull;</span>
+                <a href="https://www.rfcchickenwatford.com/terms" target="_blank" rel="noreferrer" style={{ fontSize: '0.82rem', color: 'var(--text2)', fontWeight: 600, textDecoration: 'none' }}>Terms &amp; Conditions</a>
+                <span style={{ color: 'var(--border)' }}>&bull;</span>
+                <button type="button" className="footer-link-button" onClick={() => setIsPrivacyOpen(true)} style={{ fontSize: '0.82rem', color: 'var(--red)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Privacy Policy</button>
               </div>
+            </div>
+            <div style={{ maxWidth: '1320px', margin: '16px auto 0', paddingTop: '16px', borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: '0.78rem', color: 'var(--text3)' }}>
+              &copy; {new Date().getFullYear()} RFC Watford Kitchen. All rights reserved. Prepared fresh to order.
             </div>
           </footer>
         </>
       )}
 
       {!isAdminView && !orders.activeOrder && cart.cartCount > 0 && (
-        <button className="floating-cart-cta" onClick={() => setIsCartOpen(true)}>
-          <span>{cart.cartCount} item{cart.cartCount === 1 ? '' : 's'} in basket</span>
-          <strong>GBP {cart.cartSubtotal.toFixed(2)}</strong>
-        </button>
+        <motion.button 
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
+          className="floating-cart-cta" 
+          onClick={() => setIsCartOpen(true)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ShoppingBag size={18} />
+            <span>{cart.cartCount} {cart.cartCount === 1 ? 'item' : 'items'} in basket</span>
+          </div>
+          <strong style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', background: 'rgba(255,255,255,0.2)', padding: '2px 10px', borderRadius: 'var(--radius-full)' }}>
+            £{cart.cartSubtotal.toFixed(2)}
+          </strong>
+        </motion.button>
       )}
 
       <ItemModal
