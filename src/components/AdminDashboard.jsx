@@ -15,14 +15,14 @@ import { CATEGORIES, MENU_ITEMS } from '../data/initialMenu';
 import PrintReceiptModal from './PrintReceiptModal';
 import ReviewsManager from './ReviewsManager';
 
-const DEMO_ORDERS = [
-  { id: '1001', orderNumber: '1001', customerName: 'Alice Smith', customerPhone: '+44 7700 900111', deliveryAddress: '10 Main St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Placed', total: 25.50, items: [{name: 'Boneless Banquet', quantity: 1, price: 8.99}, {name: 'Hot Wings', quantity: 2, price: 4.50}], createdAt: '2026-08-03T12:30:00Z' },
-  { id: '1002', orderNumber: '1002', customerName: 'Bob Jones', customerPhone: '+44 7700 900222', deliveryAddress: '15 High St, Watford', orderType: 'collection', paymentMethod: 'CASH', orderStatus: 'Preparing', total: 18.00, items: [{name: 'Family Bucket', quantity: 1, price: 18.00}], createdAt: '2026-08-03T12:45:00Z' },
-  { id: '1003', orderNumber: '1003', customerName: 'Charlie Brown', customerPhone: '+44 7700 900333', deliveryAddress: '20 Market St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 45.20, items: [{name: 'Party Platter', quantity: 2, price: 20.00}], createdAt: '2026-08-03T11:15:00Z' },
-  { id: '1004', orderNumber: '1004', customerName: 'David Lee', customerPhone: '+44 7700 900444', deliveryAddress: '5 Park Ave, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Refunded', refundAmount: 15.00, refundReason: 'Late delivery', total: 15.00, items: [{name: 'Zinger Burger Meal', quantity: 2, price: 7.50}], createdAt: '2026-08-02T18:30:00Z' },
-  { id: '1005', orderNumber: '1005', customerName: 'Eva Green', customerPhone: '+44 7700 900555', deliveryAddress: '8 Elm Rd, Watford', orderType: 'collection', paymentMethod: 'CARD', orderStatus: 'Cancelled', cancellationReason: 'Customer request', total: 22.00, items: [{name: 'Veggie Wrap', quantity: 2, price: 11.00}], createdAt: '2026-08-02T19:00:00Z' },
-  { id: '1006', orderNumber: '1006', customerName: 'Frank White', customerPhone: '+44 7700 900666', deliveryAddress: '12 Oak St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 30.00, items: [{name: 'Chicken Tenders', quantity: 3, price: 10.00}], createdAt: '2026-07-25T14:00:00Z' }
-];
+// const DEMO_ORDERS = [
+//   { id: '1001', orderNumber: '1001', customerName: 'Alice Smith', customerPhone: '+44 7700 900111', deliveryAddress: '10 Main St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Placed', total: 25.50, items: [{name: 'Boneless Banquet', quantity: 1, price: 8.99}, {name: 'Hot Wings', quantity: 2, price: 4.50}], createdAt: '2026-08-03T12:30:00Z' },
+//   { id: '1002', orderNumber: '1002', customerName: 'Bob Jones', customerPhone: '+44 7700 900222', deliveryAddress: '15 High St, Watford', orderType: 'collection', paymentMethod: 'CASH', orderStatus: 'Preparing', total: 18.00, items: [{name: 'Family Bucket', quantity: 1, price: 18.00}], createdAt: '2026-08-03T12:45:00Z' },
+//   { id: '1003', orderNumber: '1003', customerName: 'Charlie Brown', customerPhone: '+44 7700 900333', deliveryAddress: '20 Market St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 45.20, items: [{name: 'Party Platter', quantity: 2, price: 20.00}], createdAt: '2026-08-03T11:15:00Z' },
+//   { id: '1004', orderNumber: '1004', customerName: 'David Lee', customerPhone: '+44 7700 900444', deliveryAddress: '5 Park Ave, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Refunded', refundAmount: 15.00, refundReason: 'Late delivery', total: 15.00, items: [{name: 'Zinger Burger Meal', quantity: 2, price: 7.50}], createdAt: '2026-08-02T18:30:00Z' },
+//   { id: '1005', orderNumber: '1005', customerName: 'Eva Green', customerPhone: '+44 7700 900555', deliveryAddress: '8 Elm Rd, Watford', orderType: 'collection', paymentMethod: 'CARD', orderStatus: 'Cancelled', cancellationReason: 'Customer request', total: 22.00, items: [{name: 'Veggie Wrap', quantity: 2, price: 11.00}], createdAt: '2026-08-02T19:00:00Z' },
+//   { id: '1006', orderNumber: '1006', customerName: 'Frank White', customerPhone: '+44 7700 900666', deliveryAddress: '12 Oak St, Watford', orderType: 'delivery', paymentMethod: 'CARD', orderStatus: 'Completed', total: 30.00, items: [{name: 'Chicken Tenders', quantity: 3, price: 10.00}], createdAt: '2026-07-25T14:00:00Z' }
+// ];
 
 export default function AdminDashboard({ showToast }) {
   const [orders, setOrders] = useState([]);
@@ -87,17 +87,17 @@ export default function AdminDashboard({ showToast }) {
         getMenuItems()
       ]);
 
-      if (orderData.status === 'fulfilled' && Array.isArray(orderData.value) && orderData.value.length > 0) {
+      if (orderData.status === 'fulfilled' && Array.isArray(orderData.value)) {
         setOrders(orderData.value);
       } else {
-        if (orders.length === 0) setOrders(DEMO_ORDERS);
+        if (orders.length === 0) setOrders([]);
       }
 
       if (menuData.status === 'fulfilled' && Array.isArray(menuData.value) && menuData.value.length > 0) {
         setProducts(menuData.value);
       }
     } catch (e) {
-      if (orders.length === 0) setOrders(DEMO_ORDERS);
+      if (orders.length === 0) setOrders([]);
       console.warn('Backend load failed, using local fallback state');
     } finally {
       setLoading(false);

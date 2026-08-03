@@ -21,6 +21,18 @@ const AVATAR_PRESETS = [
   { id: 'star', label: '🌟 Gold Star', color: '#D97706' }
 ];
 
+const AUTH_BENEFITS = [
+  { icon: Clock, title: 'Live order tracking', desc: 'Follow kitchen and delivery updates from one place.' },
+  { icon: Gift, title: 'Loyalty rewards', desc: 'Earn stamps automatically when you order.' },
+  { icon: ShieldCheck, title: 'Saved account details', desc: 'Keep delivery details ready for repeat orders.' }
+];
+
+const AUTH_METRICS = [
+  { value: '8', label: 'Stamp reward' },
+  { value: '15%', label: 'VIP voucher' },
+  { value: '1-click', label: 'Reorder' }
+];
+
 export default function CustomerDashboard({ isOpen, onClose, orders = [], onReorder, onPrintReceipt, onCancelOrder, showToast }) {
   const [activeTab, setActiveTab] = useState('orders');
   const [currentUser, setCurrentUser] = useState({ name: 'Vishnu Karun', email: 'vishnu@example.com', phone: '+44 7700 900077', address: '37 Berry Avenue', postcode: 'WD24 6RU', avatarUrl: '', avatarPreset: 'crown' });
@@ -232,6 +244,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               Switch Account
             </button>
           )}
+          {authMode !== 'none' && <div style={{ width: 128 }} aria-hidden="true" />}
         </div>
       </div>
 
@@ -244,21 +257,17 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               <div className="customer-auth-benefits">
                 <div>
                   <div className="customer-auth-kicker">
-                    <Sparkles size={14} color="var(--amber)" /> RFC WATFORD VIP CLUB
+                    <Sparkles size={14} color="var(--amber)" /> RFC CUSTOMER PORTAL
                   </div>
                   <h2 className="customer-auth-title">
-                    Crispy Chicken.<br />Instant Rewards.
+                    Account setup for faster ordering.
                   </h2>
                   <p className="customer-auth-copy">
-                    Sign in to track orders live, earn 8-stamp loyalty rewards, and claim 15% OFF vouchers!
+                    Keep profile, delivery, loyalty, and reorder details ready in one clean dashboard.
                   </p>
 
                   <div className="customer-auth-benefit-list">
-                    {[
-                      { icon: Award, title: '8-Stamp Loyalty Club', desc: 'Earn 1 stamp per order & unlock 15% OFF.' },
-                      { icon: RotateCcw, title: '1-Click Express Reorder', desc: 'Reorder past feasts in seconds.' },
-                      { icon: ShieldCheck, title: 'Exclusive VIP Promos', desc: 'Access members-only discounts.' }
-                    ].map((f, i) => {
+                    {AUTH_BENEFITS.map((f, i) => {
                       const FIcon = f.icon;
                       return (
                         <div key={i} className="customer-auth-benefit-item">
@@ -272,6 +281,15 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                         </div>
                       );
                     })}
+                  </div>
+
+                  <div className="customer-auth-metrics">
+                    {AUTH_METRICS.map((metric) => (
+                      <div key={metric.label} className="customer-auth-metric">
+                        <strong>{metric.value}</strong>
+                        <span>{metric.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -331,7 +349,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   </div>
                 )}
 
-                <form onSubmit={handleAuthSubmit} className="customer-auth-form">
+                <form onSubmit={handleAuthSubmit} className={`customer-auth-form ${authMode === 'register' ? 'is-register' : 'is-login'}`}>
                   {authMode === 'register' && (
                     <div>
                       <label className="customer-auth-label">Full Name</label>
@@ -387,7 +405,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     type="button"
                     onClick={() => setAuthMode('none')}
                   >
-                    Continue as Guest Customer →
+                    <span>Continue as Guest Customer</span>
+                    <ArrowRight size={14} />
                   </button>
                 </div>
               </div>
