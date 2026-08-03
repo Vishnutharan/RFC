@@ -211,48 +211,63 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" style={{ maxWidth: '820px', borderRadius: 'var(--radius-lg)' }} onClick={(e) => e.stopPropagation()}>
-        
-        <div style={{
-          background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 50%, #F8FAFC 100%)',
-          padding: '24px 28px', borderBottom: '1px solid var(--border)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <div style={{ position: 'relative' }}>
-                <div style={{ padding: '3px', background: 'linear-gradient(135deg, var(--red), var(--amber))', borderRadius: '50%' }}>
-                  {renderUserAvatar(64)}
-                </div>
-                <div style={{ position: 'absolute', bottom: 4, right: 4, width: 14, height: 14, background: 'var(--green)', borderRadius: '50%', border: '2px solid #FFF' }}></div>
+    <div className="customer-dashboard-container" style={{ maxWidth: '1280px', margin: '24px auto', padding: '0 20px' }}>
+      
+      {/* Header Back Navigation & Customer Banner */}
+      <div style={{
+        background: 'linear-gradient(135deg, #FFF5F5 0%, #FFF8ED 50%, #F8FAFC 100%)',
+        padding: '28px 32px',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-sm)',
+        marginBottom: '24px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+          <button 
+            type="button"
+            onClick={onClose}
+            className="btn-add-item"
+            style={{ padding: '8px 18px', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            ← Back to Menu
+          </button>
+          
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}
+              className="mode-btn"
+              style={{ fontSize: '0.82rem', padding: '8px 14px', border: '1px solid var(--border)', background: '#FFF' }}
+            >
+              {authMode !== 'none' ? '← Account Portal' : 'Switch / Login Account'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{ padding: '3px', background: 'linear-gradient(135deg, var(--red), var(--amber))', borderRadius: '50%' }}>
+                {renderUserAvatar(68)}
               </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.4rem', fontWeight: 900, color: 'var(--text)' }}>
-                    {currentUser?.name || 'Customer Portal'}
-                  </h3>
-                  {currentUser?.name && (
-                    <span className="cat-badge" style={{ background: 'var(--amber)', color: '#FFF', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Star size={10} fill="#FFF" /> VIP
-                    </span>
-                  )}
-                </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <MapPin size={12} /> {currentUser?.address || 'Update address in profile'} {currentUser?.postcode ? `• ${currentUser.postcode}` : ''}
-                </p>
-              </div>
+              <div style={{ position: 'absolute', bottom: 4, right: 4, width: 14, height: 14, background: 'var(--green)', borderRadius: '50%', border: '2px solid #FFF' }}></div>
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setAuthMode(authMode === 'none' ? 'login' : 'none')}
-                className="btn-add-item"
-                style={{ fontSize: '0.82rem', padding: '8px 14px' }}
-              >
-                {authMode !== 'none' ? '← Back to Account' : 'Switch / Login'}
-              </button>
-              <button className="close-btn" onClick={onClose}><X size={20} /></button>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', fontWeight: 900, color: 'var(--text)', margin: 0 }}>
+                  {currentUser?.name || 'Customer Portal'}
+                </h3>
+                {currentUser?.name && (
+                  <span className="cat-badge" style={{ background: 'var(--amber)', color: '#FFF', fontSize: '0.68rem', display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px' }}>
+                    <Star size={11} fill="#FFF" /> VIP MEMBER
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text2)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <MapPin size={13} color="var(--red)" /> {currentUser?.address || 'Update address in profile'} {currentUser?.postcode ? `• ${currentUser.postcode}` : ''}
+              </p>
             </div>
           </div>
+        </div>
 
           {currentUser?.name && authMode === 'none' && (
             <div style={{ display: 'flex', gap: '16px', marginTop: '20px', flexWrap: 'wrap' }}>
@@ -618,13 +633,6 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
             {activeTab === 'reviews' && <ReviewsManager isAdmin={false} showToast={showToast} />}
           </div>
         )}
-
-        <div className="modal-footer" style={{ justifyContent: 'center' }}>
-          <button className="mode-btn" onClick={onClose} style={{ width: '100%', justifyContent: 'center', border: '1px solid var(--border)', background: 'var(--surface)', padding: '12px', borderRadius: 'var(--radius-sm)', fontWeight: 700 }}>
-            Close Customer Portal
-          </button>
-        </div>
-      </div>
 
       <CancelOrderModal
         isOpen={!!cancelModalOrder}

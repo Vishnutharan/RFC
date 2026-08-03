@@ -185,6 +185,18 @@ export default function App() {
         <ErrorBoundary title="Staff dashboard failed">
           <AdminDashboard showToast={showToast} adminUser={adminUser} onExit={() => setIsAdminView(false)} />
         </ErrorBoundary>
+      ) : isCustomerDashboardOpen ? (
+        <ErrorBoundary title="Customer portal failed">
+          <CustomerDashboard
+            isOpen={true}
+            onClose={() => setIsCustomerDashboardOpen(false)}
+            orders={orders.userOrders}
+            onReorder={handleReorder}
+            onPrintReceipt={(order) => setPrintReceiptOrder(order)}
+            onCancelOrder={handleCancelOrder}
+            showToast={showToast}
+          />
+        </ErrorBoundary>
       ) : orders.activeOrder ? (
         <ErrorBoundary title="Order tracker failed">
           <OrderTracker
@@ -329,15 +341,6 @@ export default function App() {
         />
       </ErrorBoundary>
 
-      <CustomerDashboard
-        isOpen={isCustomerDashboardOpen}
-        onClose={() => setIsCustomerDashboardOpen(false)}
-        orders={orders.userOrders}
-        onReorder={handleReorder}
-        onPrintReceipt={(order) => setPrintReceiptOrder(order)}
-        onCancelOrder={handleCancelOrder}
-        showToast={showToast}
-      />
 
       <PrintReceiptModal
         isOpen={Boolean(printReceiptOrder)}
