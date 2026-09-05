@@ -246,14 +246,57 @@ export default function App() {
             setActiveCategory={setActiveCategory}
           />
 
-          <main id="menu" className="menu-main-container">
-            <div className="section-header">
-              <h2>
-                {activeCategory === 'all'
-                  ? 'Full RFC Menu'
-                  : CATEGORIES.find((category) => category.id === activeCategory)?.name || 'Menu'}
-              </h2>
-              <span className="item-count">{filteredItems.length} items available</span>
+          <main id="menu" className="menu-main-container" style={{ marginTop: '20px' }}>
+            <div
+              className="section-header-reference"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-end',
+                flexWrap: 'wrap',
+                gap: '16px',
+                marginBottom: '28px',
+                paddingBottom: '16px',
+                borderBottom: '1px solid rgba(26, 24, 23, 0.08)'
+              }}
+            >
+              <div>
+                <span
+                  style={{
+                    display: 'block',
+                    fontFamily: 'var(--font-head)',
+                    fontSize: '0.78rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    color: 'var(--rose)',
+                    marginBottom: '6px'
+                  }}
+                >
+                  SIGNATURE DISHES & MENU
+                </span>
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontSize: 'clamp(2rem, 4.2vw, 2.7rem)',
+                    fontWeight: 800,
+                    color: '#1A1817',
+                    lineHeight: 1.1,
+                    margin: 0
+                  }}
+                >
+                  Choose your meal
+                </h2>
+              </div>
+
+              <div style={{ maxWidth: '420px', textAlign: 'right' }}>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text2)', lineHeight: 1.45, fontWeight: 500 }}>
+                  Every RFC order includes freshly prepared 100% halal chicken, signature herbs &amp; secret house dipping sauces.
+                </p>
+                <span style={{ display: 'inline-block', marginTop: '4px', fontSize: '0.76rem', color: 'var(--rose)', fontWeight: 800 }}>
+                  {filteredItems.length} items available
+                </span>
+              </div>
             </div>
 
             {isLoadingMenu ? (

@@ -625,26 +625,26 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               }
             `}</style>
 
-            {/* Dark Sidebar (Full Height Edge-to-Edge TailAdmin Layout) */}
-            <aside style={{ background: '#1C2434', borderRadius: 0, color: '#DEE4EE', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', padding: '24px 18px', borderRight: '1px solid rgba(255,255,255,0.05)', boxShadow: '4px 0 20px rgba(0,0,0,0.08)' }}>
+            {/* Dark Sidebar (Luxury Warm Dark Charcoal Layout) */}
+            <aside style={{ background: '#1A1817', borderRadius: 0, color: '#DEE4EE', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', padding: '24px 18px', borderRight: '1px solid rgba(255,255,255,0.06)', boxShadow: '4px 0 20px rgba(0,0,0,0.12)' }}>
               
               {/* Brand Header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '16px' }}>
-                <img src="/assets/rfc.png" alt="RFC Logo" style={{ width: 28, height: 28, borderRadius: '6px', objectFit: 'cover' }} />
+                <img src="/assets/rfc.png" alt="RFC Logo" style={{ width: 30, height: 30, borderRadius: '8px', objectFit: 'cover' }} />
                 <div>
-                  <strong style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', color: '#FFF', display: 'block', lineHeight: 1.1 }}>
-                    RFC Portal
+                  <strong style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', color: '#FFF', display: 'block', lineHeight: 1.1, fontWeight: 900 }}>
+                    RFC <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--rose)' }}>Portal</span>
                   </strong>
-                  <span style={{ fontSize: '0.68rem', color: '#8A99AD', fontWeight: 700 }}>Customer Account & Rewards</span>
+                  <span style={{ fontSize: '0.68rem', color: '#A3A3A3', fontWeight: 700, letterSpacing: '0.04em' }}>CUSTOMER ACCOUNT & REWARDS</span>
                 </div>
               </div>
 
               {/* Profile Card */}
-              <div style={{ padding: '12px', background: '#24303F', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ padding: '14px', background: 'rgba(255,255,255,0.06)', borderRadius: '14px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     {renderUserAvatar(42)}
-                    <div style={{ position: 'absolute', bottom: 0, right: 0, width: 9, height: 9, background: '#10B981', borderRadius: '50%', border: '2px solid #24303F' }}></div>
+                    <div style={{ position: 'absolute', bottom: 0, right: 0, width: 9, height: 9, background: '#10B981', borderRadius: '50%', border: '2px solid #1A1817' }}></div>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '0.98rem', fontWeight: 900, color: '#FFF', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -660,7 +660,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               {/* Navigation Links */}
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
-                  <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#8A99AD', letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', paddingLeft: '8px' }}>
+                  <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#A3A3A3', letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', paddingLeft: '8px' }}>
                     MY ACCOUNT
                   </span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -673,19 +673,19 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                           onClick={() => setActiveTab(t.id)}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '10px 12px', borderRadius: '8px',
-                            background: isActive ? '#333A48' : 'transparent',
-                            color: isActive ? '#FFF' : '#8A99AD',
+                            padding: '10px 14px', borderRadius: '10px',
+                            background: isActive ? 'var(--rose)' : 'transparent',
+                            color: isActive ? '#FFF' : '#D4D4D4',
                             border: 'none', cursor: 'pointer', transition: 'all 0.15s ease',
                             fontWeight: isActive ? 800 : 600, fontSize: '0.85rem'
                           }}
                         >
                           <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Icon size={16} color={isActive ? 'var(--red)' : '#8A99AD'} />
+                            <Icon size={16} color={isActive ? '#FFF' : 'var(--rose)'} />
                             <span>{t.label}</span>
                           </span>
                           {t.count && (
-                            <span style={{ background: isActive ? 'var(--red)' : 'rgba(255,255,255,0.1)', color: '#FFF', padding: '2px 7px', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 800 }}>
+                            <span style={{ background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)', color: '#FFF', padding: '2px 7px', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 800 }}>
                               {t.count}
                             </span>
                           )}
@@ -701,7 +701,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
                       background: 'transparent', border: 'none', borderRadius: '8px',
-                      cursor: 'pointer', color: '#8A99AD', fontWeight: 600, fontSize: '0.85rem', width: '100%'
+                      cursor: 'pointer', color: '#A3A3A3', fontWeight: 600, fontSize: '0.85rem', width: '100%'
                     }}
                   >
                     <Lock size={15} />
@@ -713,8 +713,8 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                       onClick={handleLogout}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px', padding: '10px 12px',
-                        background: 'rgba(225, 29, 72, 0.15)', border: '1px solid rgba(225, 29, 72, 0.3)', borderRadius: '8px',
-                        cursor: 'pointer', color: '#F43F5E', fontWeight: 800, fontSize: '0.85rem', width: '100%'
+                        background: 'rgba(200, 35, 51, 0.15)', border: '1px solid rgba(200, 35, 51, 0.3)', borderRadius: '8px',
+                        cursor: 'pointer', color: '#F87171', fontWeight: 800, fontSize: '0.85rem', width: '100%'
                       }}
                     >
                       <LogOut size={15} />
@@ -725,17 +725,17 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
               </div>
             </aside>
 
-            {/* Right Content Area (Full Height Edge-to-Edge) */}
-            <div style={{ background: '#F8FAFC', borderRadius: 0, border: 'none', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+            {/* Right Content Area (Warm Luxury Canvas) */}
+            <div style={{ background: '#FAF8F5', borderRadius: 0, border: 'none', display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
               
               {/* Content Top Navbar */}
-              <div style={{ padding: '14px 24px', background: '#FFF', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ padding: '16px 24px', background: '#FFFFFF', borderBottom: '1px solid rgba(26,24,23,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <div>
-                  <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.25rem', fontWeight: 900, color: '#1E293B', margin: 0 }}>
+                  <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.45rem', fontWeight: 800, color: '#1A1817', margin: 0, lineHeight: 1.1 }}>
                     Welcome Back, {currentUser?.name || 'Customer'}! 👋
                   </h2>
-                  <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
-                    Store: RFC Watford • 119 Courtlands Drive (01923 677407)
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text2)', fontWeight: 600, marginTop: '2px', display: 'block' }}>
+                    Store: RFC Watford &bull; 119 Courtlands Drive (01923 677407)
                   </span>
                 </div>
 
@@ -744,9 +744,9 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                     onClick={onClose}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: '6px',
-                      background: 'var(--red)', color: '#FFF', border: 'none',
-                      padding: '8px 16px', borderRadius: '9999px', fontSize: '0.82rem',
-                      fontWeight: 800, cursor: 'pointer', boxShadow: 'var(--shadow-red)'
+                      background: 'var(--rose)', color: '#FFF', border: 'none',
+                      padding: '8px 18px', borderRadius: '12px', fontSize: '0.82rem',
+                      fontWeight: 800, cursor: 'pointer', boxShadow: '0 4px 14px rgba(200, 75, 86, 0.22)'
                     }}
                   >
                     <span>Order Food Now</span>
@@ -755,10 +755,10 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                   <button
                     onClick={onClose}
                     style={{
-                      width: 32, height: 32, borderRadius: '50%',
-                      background: '#F1F5F9', border: '1px solid #E2E8F0',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#64748B', cursor: 'pointer'
+                      width: 34, height: 34, borderRadius: '50%',
+                      background: '#F5EFEB', border: '1px solid rgba(26,24,23,0.08)',
+                      display: 'flex', alignItems: 'center', justify: 'center',
+                      color: 'var(--text2)', cursor: 'pointer'
                     }}
                   >
                     <X size={16} />
@@ -807,7 +807,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                       <Clock size={18} color="#2563EB" />
                     </div>
                     <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', fontWeight: 900, color: '#2563EB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {visibleOrders[0] ? `#${visibleOrders[0].orderNumber}` : 'No Active Order'}
+                      {visibleOrders[0] ? '#' + visibleOrders[0].orderNumber : 'No Active Order'}
                     </div>
                   </div>
                 </div>
@@ -833,14 +833,14 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                                   <span style={{ fontWeight: 900, fontSize: '1.1rem', fontFamily: 'var(--font-head)' }}>Order #{ord.orderNumber}</span>
-                                  <span className={`status-badge status-${(ord.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}`}>{ord.orderStatus || 'Completed'}</span>
+                                  <span className={'status-badge status-' + (ord.orderStatus || 'completed').toLowerCase().replace(/\s+/g, '')}>{ord.orderStatus || 'Completed'}</span>
                                 </div>
                                 <p style={{ fontSize: '0.82rem', color: 'var(--text3)', fontWeight: 600, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
                                   <Clock size={13} color="var(--text3)" /> {ord.orderTime || (ord.createdAt ? new Date(ord.createdAt).toLocaleString('en-GB') : 'Today')}
                                 </p>
                                 
                                 <div style={{ marginTop: '10px', fontSize: '0.88rem', color: 'var(--text)' }}>
-                                  <strong style={{ color: 'var(--text2)' }}>Items:</strong> {ord.items ? ord.items.map(item => `${item.quantity}x ${item.name}`).join(', ') : 'Details unavailable'}
+                                  <strong style={{ color: 'var(--text2)' }}>Items:</strong> {ord.items ? ord.items.map(item => item.quantity + 'x ' + item.name).join(', ') : 'Details unavailable'}
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
@@ -958,7 +958,7 @@ export default function CustomerDashboard({ isOpen, onClose, orders = [], onReor
                           <span>{loyaltyPercent}% ({loyaltyCount}/8 Stamps)</span>
                         </div>
                         <div style={{ height: '10px', borderRadius: 'var(--radius-full)', background: 'var(--border)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${loyaltyPercent}%`, background: 'linear-gradient(90deg, var(--red), var(--amber))', transition: 'width 0.4s ease' }} />
+                          <div style={{ height: '100%', width: loyaltyPercent + '%', background: 'linear-gradient(90deg, var(--red), var(--amber))', transition: 'width 0.4s ease' }} />
                         </div>
                       </div>
 

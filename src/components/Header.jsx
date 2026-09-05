@@ -104,19 +104,23 @@ export default function Header({
           </button>
 
           <button className="brand-container" type="button" onClick={() => isAdminView && onStaffPanelClick()}>
-            <div className="logo-badge" style={{ padding: '2px', background: 'var(--red)', overflow: 'hidden' }}>
+            <div className="logo-badge" style={{ width: 42, height: 42, borderRadius: '12px', background: '#1A1817', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               <img
                 src="/assets/rfc.png"
                 alt="RFC Watford Logo"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--radius-xs)' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={(e) => {
                   e.target.style.display = 'none';
                 }}
               />
             </div>
-            <span>
-              <span className="brand-name">RFC</span>
-              <span className="brand-subtitle">Chicken &bull; Peri Peri &bull; Burgers</span>
+            <span style={{ textAlign: 'left' }}>
+              <span className="brand-name" style={{ fontFamily: 'var(--font-head)', fontWeight: 900, fontSize: '1.2rem', letterSpacing: '-0.02em', color: 'var(--text)' }}>
+                RFC <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontWeight: 700, color: 'var(--red)' }}>Watford</span>
+              </span>
+              <span className="brand-subtitle" style={{ display: 'block', fontSize: '0.68rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text2)', fontWeight: 700 }}>
+                Courtlands Drive &bull; Est 2018
+              </span>
             </span>
           </button>
 
@@ -145,7 +149,7 @@ export default function Header({
                     type="button"
                     onClick={() => setOrderMode('delivery')}
                   >
-                    <Truck size={15} />
+                    <Truck size={14} />
                     <span>Delivery</span>
                   </button>
                   <button
@@ -153,18 +157,18 @@ export default function Header({
                     type="button"
                     onClick={() => setOrderMode('collection')}
                   >
-                    <Store size={15} />
+                    <Store size={14} />
                     <span>Collect</span>
                   </button>
                 </div>
 
                 <label className="search-container">
-                  <Search className="search-icon" size={17} />
+                  <Search className="search-icon" size={16} />
                   <span className="sr-only">Search menu</span>
                   <input
                     type="text"
                     className="search-input"
-                    placeholder="Search menu..."
+                    placeholder="Search dishes..."
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                   />
@@ -176,19 +180,31 @@ export default function Header({
                   onClick={onOpenCustomerDashboard}
                   aria-label="Open account"
                 >
-                  <User size={17} />
+                  <User size={16} />
                   <span className="account-btn-label">Account</span>
                 </button>
 
-                <button
-                  className="account-btn"
-                  type="button"
-                  onClick={onStaffPanelClick}
-                  style={{ background: 'var(--red-light)', color: 'var(--red)', borderColor: 'var(--red-glow)', fontWeight: 800 }}
+                {/* Primary CTA Button matching Reference Design's top-right "Book Now" */}
+                <a
+                  href="#menu"
+                  className="header-book-now-btn"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 18px',
+                    borderRadius: '12px',
+                    background: '#1A1817',
+                    color: '#FFFFFF',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 14px rgba(26,24,23,0.18)',
+                    transition: 'var(--transition)'
+                  }}
                 >
-                  <ShieldCheck size={17} />
-                  <span className="account-btn-label">{adminLabel}</span>
-                </button>
+                  <span>🛍️</span> Order Now
+                </a>
               </>
             )}
 
@@ -204,7 +220,7 @@ export default function Header({
             )}
 
             <button className="cart-btn" type="button" onClick={onOpenCart} aria-label="Open basket">
-              <ShoppingBag size={21} />
+              <ShoppingBag size={20} />
               {cartCount > 0 && (
                 <span className={`cart-badge ${bouncing ? 'bounce' : ''}`}>{cartCount}</span>
               )}

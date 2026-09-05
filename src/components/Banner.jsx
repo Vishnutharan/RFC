@@ -139,52 +139,92 @@ export default function Banner({ onApplyVoucher, showToast }) {
             Freshly prepared artisan fried chicken, spicy wings, stacked burgers & barbecue ribs. Order direct for fast & free local delivery!
           </p>
 
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
             <motion.a
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               href="#menu"
-              className="btn-submit-modal"
-              style={{ textDecoration: 'none', padding: '12px 26px', fontSize: '0.95rem', fontWeight: 800 }}
-            >
-              Explore Menu <ArrowRight size={18} />
-            </motion.a>
-            <a
-              href="tel:01923677407"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '12px 20px',
-                borderRadius: 'var(--radius)',
-                background: '#FFF',
-                border: '1.5px solid var(--border)',
+                padding: '12px 24px',
+                borderRadius: '12px',
+                background: 'var(--rose)',
+                color: '#FFF',
                 fontWeight: 800,
-                color: 'var(--text)',
+                fontSize: '0.92rem',
                 textDecoration: 'none',
-                boxShadow: 'var(--shadow-sm)'
+                boxShadow: '0 8px 24px rgba(200, 75, 86, 0.28)'
               }}
             >
-              📞 01923 677407
-            </a>
+              Order Online <ArrowRight size={17} />
+            </motion.a>
+
+            <motion.a
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              href="#menu"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 22px',
+                borderRadius: '12px',
+                background: 'transparent',
+                border: '1.5px solid #1A1817',
+                color: '#1A1817',
+                fontWeight: 800,
+                fontSize: '0.92rem',
+                textDecoration: 'none'
+              }}
+            >
+              View Menu
+            </motion.a>
           </div>
 
-          <div className="hero-stats">
-            {stats.map((stat) => {
-              const Icon = stat.icon;
-              return (
-                <div key={stat.label} className="stat-card">
-                  <Icon
-                    size={16}
-                    style={{
-                      color: stat.color,
-                      fill: stat.fill || 'none'
-                    }}
-                  />
-                  <span>{stat.label}</span>
-                </div>
-              );
-            })}
+          {/* Reference UI Stat Counter Bar */}
+          <div
+            className="hero-stats-bar"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '24px',
+              paddingTop: '18px',
+              borderTop: '1px solid rgba(26, 24, 23, 0.1)',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.8rem', fontWeight: 900, color: '#1A1817', lineHeight: 1 }}>
+                4.9
+              </span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text2)', fontWeight: 600 }}>
+                client rating
+              </span>
+            </div>
+
+            <div style={{ width: '1px', height: '36px', background: 'rgba(26, 24, 23, 0.12)' }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.8rem', fontWeight: 900, color: '#1A1817', lineHeight: 1 }}>
+                15 MIN
+              </span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text2)', fontWeight: 600 }}>
+                express prep
+              </span>
+            </div>
+
+            <div style={{ width: '1px', height: '36px', background: 'rgba(26, 24, 23, 0.12)' }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontFamily: 'var(--font-head)', fontSize: '1.8rem', fontWeight: 900, color: '#1A1817', lineHeight: 1 }}>
+                30+
+              </span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text2)', fontWeight: 600 }}>
+                signature items
+              </span>
+            </div>
           </div>
         </motion.div>
 

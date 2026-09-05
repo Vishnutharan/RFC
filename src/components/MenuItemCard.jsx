@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { Flame, Leaf, Plus, SlidersHorizontal, Sparkles, Star } from 'lucide-react';
+import { Flame, Clock, Leaf, Plus, SlidersHorizontal, Sparkles, Star, Utensils, Drumstick } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const fallbackImage = 'https://images.unsplash.com/photo-1562967914-608f82629710?w=800&auto=format&fit=crop&q=84';
@@ -19,109 +19,187 @@ export default function MenuItemCard({ item, onSelectItem, index = 0 }) {
     }
   };
 
+  // Determine icon for top-left badge based on item category or properties
+  const renderIconBadge = () => {
+    if (item?.isSpicy) return <Flame size={18} color="var(--rose)" />;
+    if (item?.isBestseller) return <Sparkles size={18} color="var(--amber)" />;
+    if (item?.categoryId === 'burgers' || item?.categoryId === 'wrap') return <Utensils size={18} color="#2563EB" />;
+    return <Drumstick size={18} color="var(--rose)" />;
+  };
+
   return (
     <motion.article
-      className="food-card"
+      className="food-card reference-service-card"
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.18 }}
-      transition={{ delay: Math.min(index, 8) * 0.05, duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ delay: Math.min(index, 8) * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       whileHover={{ y: -6 }}
+      style={{
+        background: '#FFFFFF',
+        borderRadius: '20px',
+        border: '1.5px solid rgba(26, 24, 23, 0.07)',
+        boxShadow: '0 4px 20px rgba(26, 24, 23, 0.04)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative',
+        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+      }}
     >
-      <div className="card-img-wrapper">
+      {/* Top Header Row matching Reference UI */}
+      <div
+        style={{
+          padding: '16px 18px 12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          zIndex: 2
+        }}
+      >
+        {/* Soft Tinted Icon Badge (Top-Left) */}
+        <div
+          style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: item?.isSpicy ? '#FDF2F4' : '#F0F9FF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}
+        >
+          {renderIconBadge()}
+        </div>
+
+        {/* Large Serif Price Tag (Top-Right) */}
+        <div style={{ textAlign: 'right' }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-serif)',
+              fontSize: '1.45rem',
+              fontWeight: 800,
+              color: '#1A1817',
+              letterSpacing: '-0.02em',
+              lineHeight: 1
+            }}
+          >
+            £{price % 1 === 0 ? price.toFixed(0) : price.toFixed(2)}
+          </span>
+        </div>
+      </div>
+
+      {/* Food Visual Banner */}
+      <div className="card-img-wrapper" style={{ height: '160px', position: 'relative', overflow: 'hidden', background: '#F8FAFC' }}>
         <img
           src={item?.imageUrl || fallbackImage}
           alt={item?.name || 'Food item'}
           loading="lazy"
           onError={handleImageError}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
 
-        <div className="badge-list">
+        <div className="badge-list" style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '6px', zIndex: 2 }}>
           {isPopular && (
-            <span className="card-badge badge-bestseller">
-              <Star size={12} fill="currentColor" /> Popular
-            </span>
-          )}
-          {item?.isBestseller && (
-            <span className="card-badge badge-chef" style={{ background: 'var(--indigo)', color: '#FFF' }}>
-              <Sparkles size={12} /> Chef&apos;s Pick
+            <span className="card-badge badge-bestseller" style={{ background: 'var(--amber)', color: '#FFF', padding: '3px 9px', borderRadius: '999px', fontSize: '0.68rem', fontWeight: 800 }}>
+              <Star size={11} fill="currentColor" /> Popular
             </span>
           )}
           {item?.isSpicy && (
-            <span className="card-badge badge-spicy">
-              <Flame size={12} /> Spicy
-            </span>
-          )}
-          {isLowStock && (
-            <span className="card-badge badge-low-stock" style={{ background: 'var(--amber)', color: '#FFF' }}>
-              Only {item.stockQuantity} left
-            </span>
-          )}
-        </div>
-
-        <div className="dietary-list" style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '6px', zIndex: 2 }}>
-          {item?.isVegetarian && (
-            <span className="card-badge" style={{ background: 'var(--green)', color: '#FFF' }}>
-              <Leaf size={11} /> Veg
-            </span>
-          )}
-          {!item?.isSpicy && (
-            <span className="card-badge" style={{ background: 'rgba(255, 255, 255, 0.9)', color: 'var(--text2)', backdropFilter: 'blur(4px)' }}>
-              <Leaf size={11} /> Mild
+            <span className="card-badge badge-spicy" style={{ background: 'var(--rose)', color: '#FFF', padding: '3px 9px', borderRadius: '999px', fontSize: '0.68rem', fontWeight: 800 }}>
+              <Flame size={11} /> Spicy
             </span>
           )}
         </div>
       </div>
 
-      <div className="card-body">
-        <div className="card-title-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-          <h3 className="card-title" style={{ fontFamily: 'var(--font-head)', margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
-            {item?.name}
-          </h3>
-        </div>
+      {/* Card Content Body */}
+      <div className="card-body" style={{ padding: '16px 18px 18px', display: 'flex', flexDirection: 'column', flex: 1, gap: '6px' }}>
+        <h3
+          className="card-title"
+          style={{
+            fontFamily: 'var(--font-head)',
+            margin: 0,
+            fontSize: '1.1rem',
+            fontWeight: 800,
+            color: '#1A1817',
+            lineHeight: 1.25
+          }}
+        >
+          {item?.name}
+        </h3>
 
         {item?.description && (
-          <p className="card-desc" style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: 'var(--text2)' }}>
+          <p
+            className="card-desc"
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.82rem',
+              color: 'var(--text2)',
+              margin: '2px 0 6px 0',
+              lineHeight: 1.4,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden'
+            }}
+          >
             {item.description}
           </p>
         )}
 
-        <div className="card-meta" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text3)', marginTop: '4px', flexWrap: 'wrap' }}>
-          {caloriesText && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--surface-alt)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontWeight: 600, color: 'var(--text2)' }}>
-              <Flame size={12} style={{ color: 'var(--amber)' }} />
-              {caloriesText}
-            </span>
-          )}
-          {item?.hasOptions && (
-            <span style={{ background: 'var(--indigo-light)', color: 'var(--indigo)', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: '0.72rem' }}>
-              Customisable
-            </span>
-          )}
-          {item?.categoryName && (
-            <span style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>
-              {item.categoryName}
-            </span>
-          )}
-        </div>
+        {/* Card Footer matching Reference UI (Duration/Calories on Left, SELECT action on Right) */}
+        <div
+          className="card-footer-reference"
+          style={{
+            marginTop: 'auto',
+            paddingTop: '12px',
+            borderTop: '1px solid rgba(26, 24, 23, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px'
+          }}
+        >
+          {/* Bottom Left Info Tag */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.76rem', fontWeight: 700, color: 'var(--text2)' }}>
+            <Clock size={13} color="var(--text3)" />
+            <span>{caloriesText ? caloriesText : '15-20 MIN'}</span>
+          </div>
 
-        <div className="card-footer">
-          <span className="card-price" style={{ fontFamily: 'var(--font-head)', color: 'var(--red)', fontWeight: 900, fontSize: '1.25rem' }}>
-            £{price.toFixed(2)}
-          </span>
+          {/* Bottom Right Action Button matching "SELECT" in reference screenshot */}
           <button
-            className="btn-add-item"
+            className="btn-select-reference"
             type="button"
             onClick={() => onSelectItem?.(item)}
-            aria-label={item?.hasOptions ? `Customise ${item.name}` : `Add ${item.name} to order`}
+            aria-label={item?.hasOptions ? `Customise ${item.name}` : `Select ${item.name}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 14px',
+              borderRadius: '999px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--rose)',
+              fontFamily: 'var(--font-head)',
+              fontWeight: 900,
+              fontSize: '0.82rem',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
           >
             {item?.hasOptions ? (
               <>
-                <SlidersHorizontal size={15} /> Customise
+                <SlidersHorizontal size={13} style={{ marginRight: 2 }} /> Customise
               </>
             ) : (
               <>
-                <Plus size={15} /> Add to order
+                Select <Plus size={13} style={{ marginLeft: 2 }} />
               </>
             )}
           </button>
